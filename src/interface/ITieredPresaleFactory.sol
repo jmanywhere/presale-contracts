@@ -11,7 +11,15 @@ interface ITieredPresaleFactory {
      * @notice Ends the sale of a presale contract.
      * this one should be called by owner of presale contract to end the sale.
      */
-    function endSale(address presale) external;
+    function cancelSale(address presale) external;
+
+    function getInProgress() external view returns (address[] memory);
+
+    function getCompleted() external view returns (address[] memory);
+
+    function getCancelled() external view returns (address[] memory);
+
+    function getAll() external view returns (address[] memory);
 
     /*---------------------------------------
      *  EVENTS
