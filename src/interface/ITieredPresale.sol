@@ -11,7 +11,7 @@ interface ITieredPresale {
     }
     struct LayerInfo {
         address[] usersOnGrid; // users participating
-        uint256 tokensSold;
+        uint256 tokensToSell;
         uint256 pricePerGrid;
         uint256 startBlock;
         uint256 endBlock;
@@ -62,6 +62,8 @@ interface ITieredPresale {
     //----------------------------------
     // VIEW FUNCTIONS
     //----------------------------------
+
+    function totalLayers() external view returns (uint8);
 
     function currentLayerId() external view returns (uint8);
 
