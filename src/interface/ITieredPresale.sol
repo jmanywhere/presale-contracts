@@ -29,7 +29,11 @@ interface ITieredPresale {
         address referral;
     }
 
-    function deposit(uint8 gridId, uint amount, address referral) external;
+    function deposit(
+        uint8 gridId,
+        uint amount,
+        address referral
+    ) external payable;
 
     function refund(uint8 gridId) external;
 
