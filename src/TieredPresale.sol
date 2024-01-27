@@ -3,6 +3,7 @@
 pragma solidity 0.8.23;
 
 import "./interface/ITieredPresale.sol";
+import "./interface/IUniswapV2.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
@@ -19,12 +20,18 @@ contract TieredPresale is ITieredPresale, Ownable, ReentrancyGuard {
     // GLOBAL STATE
     //-----------------------------------------------------------------------------------
     mapping(uint8 layerId => LayerInfo) public layer;
+    mapping(uint8 layerId => address[] users) public layerUsers;
     mapping(uint8 layerId => mapping(address user => UserLayerInfo))
         public userLayer;
+    uint256 public constant BASIS_POINTS = 100;
     uint256 public totalTokensToSell;
+    uint256 public receiveForLiquidity;
+    uint256 public receiveForReferral;
+    uint256 public receiveForPrevLayer;
     address public saleToken;
     address public receiveToken;
     address public saleoOwnerWallet;
+    address public router;
     uint256 public uniqueInvestorCount;
     uint8 public immutable totalLayers;
     uint8 public immutable gridsPerLayer;
@@ -60,6 +67,7 @@ contract TieredPresale is ITieredPresale, Ownable, ReentrancyGuard {
      * [0] saleToken
      * [1] receiveToken
      * [2] saleOwner
+     * [3] routerToUse
      */
     constructor(
         uint8[] memory gridInfo,
@@ -68,6 +76,9 @@ contract TieredPresale is ITieredPresale, Ownable, ReentrancyGuard {
     ) Ownable(msg.sender) {
         saleToken = addressConfig[0];
         receiveToken = addressConfig[1];
+        router = addressConfig[3];
+        if (IUniswapV2Router02(router).WETH() == address(0))
+            revert TPresale__InvalidSetup();
         totalLayers = gridInfo[0];
         gridsPerLayer = gridInfo[1];
         // Check the Grid Info has the correct length
@@ -94,10 +105,12 @@ contract TieredPresale is ITieredPresale, Ownable, ReentrancyGuard {
         setupLayer.endBlock = layerCreateInfo[0] + layerCreateInfo[1];
         setupLayer.pricePerGrid = layerCreateInfo[2];
         setupLayer.tokensToSell = tokensToSell;
-        setupLayer.usersOnGrid = new address[](totalGridsPerLayer);
+        layerUsers[1] = new address[](totalGridsPerLayer);
         setupLayer.liquidityBasisPoints = gridInfo[2];
         setupLayer.referralBasisPoints = gridInfo[3];
         setupLayer.previousLayerBasisPoints = 0;
+        uint addedBasis = gridInfo[2] + gridInfo[3];
+        if (addedBasis > BASIS_POINTS) revert TPresale__InvalidSetup();
         // Setup LAYER 2 and above
         for (uint8 i = 2; i <= totalLayers; i++) {
             setupLayer = layer[i];
@@ -111,10 +124,15 @@ contract TieredPresale is ITieredPresale, Ownable, ReentrancyGuard {
                 layerCreateInfo[offset];
             setupLayer.pricePerGrid = layerCreateInfo[offset + 1];
             setupLayer.tokensToSell = tokensToSell;
-            setupLayer.usersOnGrid = new address[](totalGridsPerLayer);
+            layerUsers[i] = new address[](totalGridsPerLayer);
             setupLayer.liquidityBasisPoints = gridInfo[offset];
             setupLayer.referralBasisPoints = gridInfo[offset + 1];
             setupLayer.previousLayerBasisPoints = gridInfo[offset + 2];
+            addedBasis =
+                gridInfo[offset] +
+                gridInfo[offset + 1] +
+                gridInfo[offset + 2];
+            if (addedBasis > BASIS_POINTS) revert TPresale__InvalidSetup();
             setupLayer.prevLayerId = i - 1;
         }
         // Factory should transfer this amount of tokens, to this contract
@@ -135,20 +153,36 @@ contract TieredPresale is ITieredPresale, Ownable, ReentrancyGuard {
         UserLayerInfo storage userInfo = userLayer[offsetLayer][msg.sender];
 
         currentLayerInfo.gridsOccupied++;
-        currentLayerInfo.usersOnGrid[currentLayerInfo.gridsOccupied - 1] = msg
+        layerUsers[offsetLayer][currentLayerInfo.gridsOccupied - 1] = msg
             .sender;
         userInfo.totalDeposit += currentLayerInfo.pricePerGrid;
         userInfo.totalTokensToClaim +=
             currentLayerInfo.tokensToSell /
             (gridsPerLayer ** 2);
-
+        // Save the liquidity and referral amounts so they're not claimed by owner
+        uint liquidityAmount = (currentLayerInfo.pricePerGrid *
+            currentLayerInfo.liquidityBasisPoints) / BASIS_POINTS;
+        receiveForLiquidity += liquidityAmount;
         spreadToReferral(offsetLayer, msg.sender, referral);
+
+        // Set the Reward amount for the previous layer
+        if (offsetLayer > 1) {
+            // get the amount to assign the previous layer
+            LayerInfo storage prevLayer = layer[offsetLayer - 1];
+            uint prevLayerRewardAmount = (currentLayerInfo.pricePerGrid *
+                currentLayerInfo.previousLayerBasisPoints) / BASIS_POINTS;
+            if (prevLayerRewardAmount > 0 && prevLayer.gridsOccupied > 0) {
+                prevLayer.prevRewardAmount += prevLayerRewardAmount;
+                receiveForPrevLayer += prevLayerRewardAmount;
+            }
+        }
 
         // Check that enough tokens where sent to buy a grid with native
         if (receiveToken == address(0)) {
             if (msg.value != currentLayerInfo.pricePerGrid)
                 revert TPresale__InvalidDepositAmount();
         } else {
+            if (msg.value > 0) revert TPresale__InvalidDepositAmount();
             _safeTokenTransferFrom(
                 receiveToken,
                 msg.sender,
@@ -178,6 +212,12 @@ contract TieredPresale is ITieredPresale, Ownable, ReentrancyGuard {
         return status;
     }
 
+    function usersOnLayer(
+        uint8 layerId
+    ) external view returns (address[] memory) {
+        return layerUsers[layerId];
+    }
+
     //-----------------------------------------------------------------------------------
     // INTERNAL/PRIVATE VIEW PURE FUNCTIONS
     //-----------------------------------------------------------------------------------
@@ -186,10 +226,18 @@ contract TieredPresale is ITieredPresale, Ownable, ReentrancyGuard {
         uint8 currentLayer = currentLayerId();
         // dont really need to check for currentLayer == 0 since this function only gets called when currentLayer > 0
         LayerInfo storage currentLayerInfo = layer[currentLayer];
-        if (currentLayerInfo.gridsOccupied == gridsPerLayer) {
-            if (currentLayer < totalLayers) offsetLayer++;
-            else {
+        //Advance a layer if all grids are occupied or if the endBlock is reached
+        if (
+            currentLayerInfo.gridsOccupied == gridsPerLayer ||
+            block.number >= currentLayerInfo.endBlock
+        ) {
+            if (currentLayer < totalLayers) {
+                emit LayerCompleted(currentLayer);
+                offsetLayer++;
+            } else {
                 if (_before) revert TPresale__SaleEnded();
+                status = Status.COMPLETED;
+                emit SaleEnded(block.timestamp);
             }
         }
     }
@@ -212,10 +260,10 @@ contract TieredPresale is ITieredPresale, Ownable, ReentrancyGuard {
         if (userInfo.referral == address(0)) return;
         // If referral is set, spread the referral rewards
         UserLayerInfo storage referralInfo = userLayer[layerId][referral];
-        referralInfo.totalReferralRewards +=
-            (currentLayerInfo.pricePerGrid *
-                currentLayerInfo.referralBasisPoints) /
-            100;
+        uint referralAmount = (currentLayerInfo.pricePerGrid *
+            currentLayerInfo.referralBasisPoints) / BASIS_POINTS;
+        referralInfo.totalReferralRewards += referralAmount;
+        receiveForReferral += referralAmount;
     }
 
     function _safeTokenTransfer(
@@ -251,8 +299,6 @@ contract TieredPresale is ITieredPresale, Ownable, ReentrancyGuard {
     // @TODO FUNCTIONS
     //-----------------------------------------------------------------------------------
 
-    function refund(uint8 gridId) external {}
-
     function claimTokensAndRewards() external {}
 
     function setLayerStartBlock(uint8 layerId, uint256 startBlock) external {}
@@ -279,10 +325,6 @@ contract TieredPresale is ITieredPresale, Ownable, ReentrancyGuard {
         uint8 previousLayerBasisPoints
     ) external {}
 
-    function cancelRaise() external {}
-
-    function refund(uint8 gridId, uint8 layerId) external {}
-
     function nextLayerId() external view returns (uint8) {}
 
     function totalTokensToClaim() external view returns (uint256) {}
@@ -299,4 +341,6 @@ contract TieredPresale is ITieredPresale, Ownable, ReentrancyGuard {
         view
         returns (uint256 allTokens, uint referral, uint referralTokens)
     {}
+
+    function finalizeSale() external {}
 }
