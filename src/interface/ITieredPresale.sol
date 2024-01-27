@@ -23,19 +23,18 @@ interface ITieredPresale {
     }
 
     struct UserLayerInfo {
-        uint8[] layerPositions;
         uint256 totalDeposit;
         uint256 totalTokensToClaim;
+        uint256 totalReferralRewards;
         address referral;
+        bool claimed;
     }
 
-    function deposit(
-        uint8 gridId,
-        uint amount,
-        address referral
-    ) external payable;
+    function deposit(address referral) external payable;
 
-    function refund(uint8 gridId) external;
+    function refund(uint8 gridId, uint8 layerId) external;
+
+    function withdrawFromCancelledRaise() external;
 
     function claimTokensAndRewards() external;
 
@@ -62,6 +61,8 @@ interface ITieredPresale {
         uint8 layerId,
         uint8 previousLayerBasisPoints
     ) external;
+
+    function cancelRaise() external;
 
     //----------------------------------
     // VIEW FUNCTIONS
@@ -92,6 +93,12 @@ interface ITieredPresale {
         external
         view
         returns (uint256 allTokens, uint referral, uint referralTokens);
+
+    function usersOnLayer(
+        uint8 layerId
+    ) external view returns (address[] memory);
+
+    function uniqueInvestorCount() external view returns (uint256);
 
     /*---------------------------------------
      *  EVENTS
