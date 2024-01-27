@@ -280,6 +280,12 @@ contract TieredPresale is ITieredPresale, Ownable, ReentrancyGuard {
         }
     }
 
+    function canFinalize() external view returns (bool) {
+        return
+            status == Status.COMPLETED ||
+            block.number > layer[totalLayers].endBlock;
+    }
+
     //-----------------------------------------------------------------------------------
     // INTERNAL/PRIVATE VIEW PURE FUNCTIONS
     //-----------------------------------------------------------------------------------

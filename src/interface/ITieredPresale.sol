@@ -97,6 +97,8 @@ interface ITieredPresale {
 
     function uniqueInvestorCount() external view returns (uint256);
 
+    function canFinalize() external view returns (bool);
+
     /*---------------------------------------
      *  EVENTS
      *--------------------------------------*/
