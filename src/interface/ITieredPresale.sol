@@ -27,6 +27,7 @@ interface ITieredPresale {
         uint256 totalTokensToClaim;
         uint256 totalReferralRewards;
         address referral;
+        uint8 gridsOccupied;
         bool claimed;
     }
 
@@ -88,7 +89,7 @@ interface ITieredPresale {
     )
         external
         view
-        returns (uint256 allTokens, uint referral, uint referralTokens);
+        returns (uint256 depositClaim, uint referralTokens, uint layerTokens);
 
     function usersOnLayer(
         uint8 layerId

@@ -218,6 +218,25 @@ contract TieredPresale is ITieredPresale, Ownable, ReentrancyGuard {
         return layerUsers[layerId];
     }
 
+    function rewardsToClaim(
+        uint8 layerId,
+        address user
+    )
+        public
+        view
+        returns (uint256 depositClaim, uint referralTokens, uint layerTokens)
+    {
+        UserLayerInfo storage userInfo = userLayer[layerId][user];
+        LayerInfo storage layerStatus = layer[layerId];
+        depositClaim = userInfo.totalTokensToClaim;
+        referralTokens = userInfo.totalReferralRewards;
+        if (layerStatus.gridsOccupied == 0) layerTokens = 0;
+        else
+            layerTokens =
+                (layerStatus.prevRewardAmount * userInfo.gridsOccupied) /
+                layerStatus.gridsOccupied;
+    }
+
     //-----------------------------------------------------------------------------------
     // INTERNAL/PRIVATE VIEW PURE FUNCTIONS
     //-----------------------------------------------------------------------------------
@@ -332,15 +351,6 @@ contract TieredPresale is ITieredPresale, Ownable, ReentrancyGuard {
     function tokensToClaimPerLayer(
         uint8 layerId
     ) external view returns (uint256) {}
-
-    function rewardsToClaim(
-        uint8 layerId,
-        address user
-    )
-        external
-        view
-        returns (uint256 allTokens, uint referral, uint referralTokens)
-    {}
 
     function finalizeSale() external {}
 }
