@@ -10,11 +10,11 @@ interface ITieredPresale {
         CANCELLED // sale is cancelled
     }
     struct LayerInfo {
-        address[] usersOnGrid; // users participating
         uint256 tokensToSell;
         uint256 pricePerGrid;
         uint256 startBlock;
         uint256 endBlock;
+        uint256 prevRewardAmount; // rewards assigned to this layer from next layer
         uint8 liquidityBasisPoints;
         uint8 referralBasisPoints;
         uint8 previousLayerBasisPoints;
@@ -31,10 +31,6 @@ interface ITieredPresale {
     }
 
     function deposit(address referral) external payable;
-
-    function refund(uint8 gridId, uint8 layerId) external;
-
-    function withdrawFromCancelledRaise() external;
 
     function claimTokensAndRewards() external;
 
@@ -62,7 +58,7 @@ interface ITieredPresale {
         uint8 previousLayerBasisPoints
     ) external;
 
-    function cancelRaise() external;
+    function finalizeSale() external;
 
     //----------------------------------
     // VIEW FUNCTIONS
@@ -108,9 +104,9 @@ interface ITieredPresale {
 
     event ClaimTokens(address indexed user, uint amount);
 
-    event Refund(address indexed user, uint amount);
-
     event OwnerClaimRaise(uint amount);
 
     event LayerCompleted(uint8 indexed layerId);
+
+    event SaleEnded(uint timestamp);
 }
