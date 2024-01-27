@@ -72,6 +72,7 @@ contract TestPresale is Test {
             uint pricePerGrid,
             uint startBlock,
             uint endBlock,
+            uint prevRew,
             uint8 liquidityBasisPoints,
             uint8 referralBasisPoints,
             uint8 previousLayerBasisPoints,
@@ -83,6 +84,7 @@ contract TestPresale is Test {
         assertEq(pricePerGrid, compareVales[1]);
         assertEq(startBlock, compareVales[2]);
         assertEq(endBlock, compareVales[3]);
+        assertEq(prevRew, 0);
         assertEq(liquidityBasisPoints, uint8(compareVales[4]));
         assertEq(referralBasisPoints, uint8(compareVales[5]));
         assertEq(previousLayerBasisPoints, uint8(compareVales[6]));
