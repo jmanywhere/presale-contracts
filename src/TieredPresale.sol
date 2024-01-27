@@ -21,9 +21,11 @@ contract TieredPresale is ITieredPresale, Ownable, ReentrancyGuard {
     address public saleToken;
     address public receiveToken;
     address public saleoOwnerWallet;
+    uint256 public uniqueInvestorCount;
     uint8 public immutable totalLayers;
     uint8 public immutable gridsPerLayer;
-    uint8 private offsetLayer;
+    uint8 private offsetLayer = 1;
+    Status private status = Status.PENDING;
 
     //-----------------------------------------------------------------------------------
     // CONSTRUCTOR
@@ -73,15 +75,14 @@ contract TieredPresale is ITieredPresale, Ownable, ReentrancyGuard {
         }
         // Check that layerCreateInfo has the correct length
         configLength = layerCreateInfo.length;
-        console.log("configLength", configLength);
         configLength -= 4;
         if (totalLayers > 1 && configLength % 3 != 0) {
             revert TPresale__InvalidSetup();
         }
 
-        LayerInfo storage setupLayer = layer[0];
+        // SETUP LAYER 1 - Layer 0 is always empty
+        LayerInfo storage setupLayer = layer[1];
         uint256 totalGridsPerLayer = uint256(gridsPerLayer) ** 2;
-        console.log("totalGridsPerLayer", totalGridsPerLayer);
         uint tokensToSell = layerCreateInfo[3] * totalGridsPerLayer;
         uint totalTokens = tokensToSell;
         // Setup LAYER 1
@@ -97,10 +98,6 @@ contract TieredPresale is ITieredPresale, Ownable, ReentrancyGuard {
         for (uint8 i = 2; i <= totalLayers; i++) {
             setupLayer = layer[i];
             uint8 offset = (3 * i) - 2;
-            console.log("offset", offset);
-            console.log("blockDuration", layerCreateInfo[offset]);
-            console.log("pricePerGrid", layerCreateInfo[offset + 1]);
-            console.log("tokenPerGrid", layerCreateInfo[offset + 2]);
             tokensToSell = layerCreateInfo[offset + 2] * totalGridsPerLayer;
             totalTokens += tokensToSell;
 
@@ -114,6 +111,7 @@ contract TieredPresale is ITieredPresale, Ownable, ReentrancyGuard {
             setupLayer.liquidityBasisPoints = gridInfo[offset];
             setupLayer.referralBasisPoints = gridInfo[offset + 1];
             setupLayer.previousLayerBasisPoints = gridInfo[offset + 2];
+            setupLayer.prevLayerId = i - 1;
         }
         // Factory should transfer this amount of tokens, to this contract
         totalTokensToSell = totalTokens;
@@ -122,78 +120,41 @@ contract TieredPresale is ITieredPresale, Ownable, ReentrancyGuard {
     //-----------------------------------------------------------------------------------
     // EXTERNAL/PUBLIC FUNCTIONS
     //-----------------------------------------------------------------------------------
+
+    function deposit(address referral) external payable {
+        if (currentLayerId() == 0 || saleStatus() != Status.IN_PROGRESS) {
+            revert TPresale__InvalidSetup();
+        }
+
+        //If receiveToken == address(0) receive NATIVE
+        //    require msg.value to be amount else msg.value = 0;
+    }
+
     //-----------------------------------------------------------------------------------
     // INTERNAL/PRIVATE FUNCTIONS
     //-----------------------------------------------------------------------------------
     //-----------------------------------------------------------------------------------
     // EXTERNAL/PUBLIC VIEW PURE FUNCTIONS
     //-----------------------------------------------------------------------------------
-    function currentLayerId() external view returns (uint8) {
+    function currentLayerId() public view returns (uint8) {
         if (block.number < layer[0].startBlock) return 0;
         return offsetLayer;
+    }
+
+    function saleStatus() public view returns (Status) {
+        if (status == Status.PENDING && block.number >= layer[0].startBlock) {
+            return Status.IN_PROGRESS;
+        }
+        return status;
     }
 
     //-----------------------------------------------------------------------------------
     // INTERNAL/PRIVATE VIEW PURE FUNCTIONS
     //-----------------------------------------------------------------------------------
-    //-----------------------------------------------------------------------------------
-    // @TODO FUNCTIONS
-    //-----------------------------------------------------------------------------------
-    function deposit(
-        uint8 gridId,
-        uint amount,
-        address referral
-    ) external payable {
-        //If receiveToken == address(0) receive NATIVE
-        //    require msg.value to be amount else msg.value = 0;
+
+    function checkForNextLayer() private {
+        uint8 currentLayer = currentLayerId();
     }
-
-    function refund(uint8 gridId) external {}
-
-    function claimTokensAndRewards() external {}
-
-    function setLayerStartBlock(uint8 layerId, uint256 startBlock) external {}
-
-    function setLayerDuration(uint8 layerId, uint256 duration) external {}
-
-    function setLayerPricePerGrid(
-        uint8 layerId,
-        uint256 pricePerGrid
-    ) external {}
-
-    function setLayerLiquidityBasisPoints(
-        uint8 layerId,
-        uint8 liquidityBasisPoints
-    ) external {}
-
-    function setLayerReferralBasisPoints(
-        uint8 layerId,
-        uint8 referralBasisPoints
-    ) external {}
-
-    function setLayerPreviousLayerBasisPoints(
-        uint8 layerId,
-        uint8 previousLayerBasisPoints
-    ) external {}
-
-    function nextLayerId() external view returns (uint8) {}
-
-    function totalTokensToClaim() external view returns (uint256) {}
-
-    function tokensToClaimPerLayer(
-        uint8 layerId
-    ) external view returns (uint256) {}
-
-    function saleStatus() external view returns (Status) {}
-
-    function rewardsToClaim(
-        uint8 layerId,
-        address user
-    )
-        external
-        view
-        returns (uint256 allTokens, uint referral, uint referralTokens)
-    {}
 
     function _safeTokenTransfer(
         address token,
@@ -223,4 +184,57 @@ contract TieredPresale is ITieredPresale, Ownable, ReentrancyGuard {
         );
         if (!succ) revert TPresale__CouldNotTransfer(token, amount);
     }
+
+    //-----------------------------------------------------------------------------------
+    // @TODO FUNCTIONS
+    //-----------------------------------------------------------------------------------
+
+    function refund(uint8 gridId) external {}
+
+    function claimTokensAndRewards() external {}
+
+    function setLayerStartBlock(uint8 layerId, uint256 startBlock) external {}
+
+    function setLayerDuration(uint8 layerId, uint256 duration) external {}
+
+    function setLayerPricePerGrid(
+        uint8 layerId,
+        uint256 pricePerGrid
+    ) external {}
+
+    function setLayerLiquidityBasisPoints(
+        uint8 layerId,
+        uint8 liquidityBasisPoints
+    ) external {}
+
+    function setLayerReferralBasisPoints(
+        uint8 layerId,
+        uint8 referralBasisPoints
+    ) external {}
+
+    function setLayerPreviousLayerBasisPoints(
+        uint8 layerId,
+        uint8 previousLayerBasisPoints
+    ) external {}
+
+    function cancelRaise() external {}
+
+    function refund(uint8 gridId, uint8 layerId) external {}
+
+    function nextLayerId() external view returns (uint8) {}
+
+    function totalTokensToClaim() external view returns (uint256) {}
+
+    function tokensToClaimPerLayer(
+        uint8 layerId
+    ) external view returns (uint256) {}
+
+    function rewardsToClaim(
+        uint8 layerId,
+        address user
+    )
+        external
+        view
+        returns (uint256 allTokens, uint referral, uint referralTokens)
+    {}
 }
