@@ -13,6 +13,8 @@ import "forge-std/console.sol";
 error TPresale__InvalidSetup();
 error TPresale__CouldNotTransfer(address _token, uint amount);
 error TPresale__SaleEnded();
+error TPresale__SaleNotEnded();
+error TPresale__CantClaim();
 error TPresale__InvalidDepositAmount();
 
 contract TieredPresale is ITieredPresale, Ownable, ReentrancyGuard {
@@ -237,6 +239,47 @@ contract TieredPresale is ITieredPresale, Ownable, ReentrancyGuard {
                 layerStatus.gridsOccupied;
     }
 
+    function claimTokensAndRewards() external {
+        if (status != Status.COMPLETED) revert TPresale__SaleNotEnded();
+        uint256 totalPrizeTokens = 0;
+        uint256 totalReferralTokens = 0;
+        uint256 totalLayerRewards = 0;
+        for (uint8 i = 1; i <= totalLayers; i++) {
+            if (userLayer[i][msg.sender].claimed) continue;
+            (
+                uint256 depositClaim,
+                uint256 referralTokens,
+                uint256 layerTokens
+            ) = rewardsToClaim(i, msg.sender);
+            totalPrizeTokens += depositClaim;
+            totalReferralTokens += referralTokens;
+            totalLayerRewards += layerTokens;
+            userLayer[i][msg.sender].claimed = true;
+        }
+        if (
+            totalPrizeTokens == 0 &&
+            totalReferralTokens == 0 &&
+            totalLayerRewards == 0
+        ) revert TPresale__CantClaim();
+        emit ClaimTokens(
+            msg.sender,
+            totalPrizeTokens,
+            totalReferralTokens,
+            totalLayerRewards
+        );
+        if (totalPrizeTokens > 0) {
+            _safeTokenTransfer(saleToken, msg.sender, totalPrizeTokens);
+        }
+        uint totalReceive = totalReferralTokens + totalLayerRewards;
+        if (receiveToken == address(0)) {
+            (bool succ, ) = msg.sender.call{value: totalReceive}("");
+            if (!succ)
+                revert TPresale__CouldNotTransfer(address(0), totalReceive);
+        } else {
+            _safeTokenTransfer(receiveToken, msg.sender, totalReceive);
+        }
+    }
+
     //-----------------------------------------------------------------------------------
     // INTERNAL/PRIVATE VIEW PURE FUNCTIONS
     //-----------------------------------------------------------------------------------
@@ -287,12 +330,11 @@ contract TieredPresale is ITieredPresale, Ownable, ReentrancyGuard {
 
     function _safeTokenTransfer(
         address token,
-        address from,
         address to,
         uint256 amount
     ) private {
         (bool succ, ) = token.call(
-            abi.encodeWithSelector(IERC20.transfer.selector, from, to, amount)
+            abi.encodeWithSelector(IERC20.transfer.selector, to, amount)
         );
         if (!succ) revert TPresale__CouldNotTransfer(token, amount);
     }
@@ -317,8 +359,6 @@ contract TieredPresale is ITieredPresale, Ownable, ReentrancyGuard {
     //-----------------------------------------------------------------------------------
     // @TODO FUNCTIONS
     //-----------------------------------------------------------------------------------
-
-    function claimTokensAndRewards() external {}
 
     function setLayerStartBlock(uint8 layerId, uint256 startBlock) external {}
 

@@ -103,7 +103,12 @@ interface ITieredPresale {
 
     event Deposit(address indexed user, uint8 layerId);
 
-    event ClaimTokens(address indexed user, uint amount);
+    event ClaimTokens(
+        address indexed user,
+        uint saleTokenAmount,
+        uint referralAmount,
+        uint layerRewardAmount
+    );
 
     event OwnerClaimRaise(uint amount);
 
