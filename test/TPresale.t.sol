@@ -63,9 +63,109 @@ contract TestPresale is Test {
         // );
     }
 
+    function checkLayerValues(
+        uint[] memory compareVales,
+        uint8 layerId
+    ) private {
+        (
+            uint tokensToSell,
+            uint pricePerGrid,
+            uint startBlock,
+            uint endBlock,
+            uint8 liquidityBasisPoints,
+            uint8 referralBasisPoints,
+            uint8 previousLayerBasisPoints,
+            uint8 gridsOccupied,
+            uint8 prevLayerId
+        ) = presaleWithToken.layer(layerId);
+
+        assertEq(tokensToSell, compareVales[0]);
+        assertEq(pricePerGrid, compareVales[1]);
+        assertEq(startBlock, compareVales[2]);
+        assertEq(endBlock, compareVales[3]);
+        assertEq(liquidityBasisPoints, uint8(compareVales[4]));
+        assertEq(referralBasisPoints, uint8(compareVales[5]));
+        assertEq(previousLayerBasisPoints, uint8(compareVales[6]));
+        assertEq(gridsOccupied, uint8(compareVales[7]));
+        assertEq(prevLayerId, uint8(compareVales[8]));
+    }
+
     function test_presale_with_token_setup() public {
         assertEq(presaleWithToken.currentLayerId(), 0);
         assertEq(presaleWithToken.totalLayers(), 3);
         assertEq(presaleWithToken.totalTokensToSell(), 72000 ether);
+
+        uint[] memory compareVales = new uint[](9);
+        compareVales[0] = 16000 ether; //tokensToSell
+        compareVales[1] = 0.1 ether; //pricePerGrid
+        compareVales[2] = 10; //startBlock
+        compareVales[3] = 1010; //endBlock
+        compareVales[4] = 100; //liquidityBasisPoints
+        compareVales[5] = 0; //referralBasisPoints
+        compareVales[6] = 0; //previousLayerBasisPoints
+        compareVales[7] = 0; //gridsOccupied
+        compareVales[8] = 0; //prevLayerId
+        checkLayerValues(compareVales, 1);
+
+        compareVales[0] = 24000 ether; //tokensToSell
+        compareVales[1] = 0.2 ether; //pricePerGrid
+        compareVales[2] = 1010; //startBlock
+        compareVales[3] = 3010; //endBlock
+        compareVales[4] = 50; //liquidityBasisPoints
+        compareVales[5] = 10; //referralBasisPoints
+        compareVales[6] = 20; //previousLayerBasisPoints
+        compareVales[7] = 0; //gridsOccupied
+        compareVales[8] = 1; //prevLayerId
+        checkLayerValues(compareVales, 2);
+
+        compareVales[0] = 32000 ether; //tokensToSell
+        compareVales[1] = 0.3 ether; //pricePerGrid
+        compareVales[2] = 3010; //startBlock
+        compareVales[3] = 6010; //endBlock
+        compareVales[4] = 60; //liquidityBasisPoints
+        compareVales[5] = 10; //referralBasisPoints
+        compareVales[6] = 10; //previousLayerBasisPoints
+        compareVales[7] = 0; //gridsOccupied
+        compareVales[8] = 2; //prevLayerId
+        checkLayerValues(compareVales, 3);
+
+        compareVales[0] = 0;
+        compareVales[1] = 0;
+        compareVales[2] = 0;
+        compareVales[3] = 0;
+        compareVales[4] = 0;
+        compareVales[5] = 0;
+        compareVales[6] = 0;
+        compareVales[7] = 0;
+        compareVales[8] = 0;
+        checkLayerValues(compareVales, 4);
+        compareVales[0] = 0;
+        compareVales[1] = 0;
+        compareVales[2] = 0;
+        compareVales[3] = 0;
+        compareVales[4] = 0;
+        compareVales[5] = 0;
+        compareVales[6] = 0;
+        compareVales[7] = 0;
+        compareVales[8] = 0;
+        checkLayerValues(compareVales, 0);
+    }
+
+    function test_deposit_multiple_users() public {
+        // Single user deposits and gets 1 grid allocated
+        // User deposits on same layer, should get 2 grids allocated
+        // User 2 deposits on same layer, should get 1 grids allocated
+    }
+
+    function test_layer_limit() public {
+        // Test that when a layer is completely filled, the next deposit, opens up the next layer
+        // If all layers are filled, should fail next deposit.
+    }
+
+    function test_refund() public {
+        // Test that a user can refund their deposit
+        // Test that a user cant refund when layer is full
+        // test that a user cant refund when timer is 15 min prior to over
+        //  15 min or 10% of block durtaion since start to finish
     }
 }
