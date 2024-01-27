@@ -11,12 +11,16 @@ import "forge-std/console.sol";
 
 error TPresale__InvalidSetup();
 error TPresale__CouldNotTransfer(address _token, uint amount);
+error TPresale__SaleEnded();
+error TPresale__InvalidDepositAmount();
 
 contract TieredPresale is ITieredPresale, Ownable, ReentrancyGuard {
     //-----------------------------------------------------------------------------------
     // GLOBAL STATE
     //-----------------------------------------------------------------------------------
     mapping(uint8 layerId => LayerInfo) public layer;
+    mapping(uint8 layerId => mapping(address user => UserLayerInfo))
+        public userLayer;
     uint256 public totalTokensToSell;
     address public saleToken;
     address public receiveToken;
@@ -125,9 +129,35 @@ contract TieredPresale is ITieredPresale, Ownable, ReentrancyGuard {
         if (currentLayerId() == 0 || saleStatus() != Status.IN_PROGRESS) {
             revert TPresale__InvalidSetup();
         }
+        // checks that the offset is shifted to the next layer
+        checkForNextLayer(true);
+        LayerInfo storage currentLayerInfo = layer[offsetLayer];
+        UserLayerInfo storage userInfo = userLayer[offsetLayer][msg.sender];
 
-        //If receiveToken == address(0) receive NATIVE
-        //    require msg.value to be amount else msg.value = 0;
+        currentLayerInfo.gridsOccupied++;
+        currentLayerInfo.usersOnGrid[currentLayerInfo.gridsOccupied - 1] = msg
+            .sender;
+        userInfo.totalDeposit += currentLayerInfo.pricePerGrid;
+        userInfo.totalTokensToClaim +=
+            currentLayerInfo.tokensToSell /
+            (gridsPerLayer ** 2);
+
+        spreadToReferral(offsetLayer, msg.sender, referral);
+
+        // Check that enough tokens where sent to buy a grid with native
+        if (receiveToken == address(0)) {
+            if (msg.value != currentLayerInfo.pricePerGrid)
+                revert TPresale__InvalidDepositAmount();
+        } else {
+            _safeTokenTransferFrom(
+                receiveToken,
+                msg.sender,
+                address(this),
+                currentLayerInfo.pricePerGrid
+            );
+        }
+        emit Deposit(msg.sender, offsetLayer);
+        checkForNextLayer(false);
     }
 
     //-----------------------------------------------------------------------------------
@@ -152,8 +182,40 @@ contract TieredPresale is ITieredPresale, Ownable, ReentrancyGuard {
     // INTERNAL/PRIVATE VIEW PURE FUNCTIONS
     //-----------------------------------------------------------------------------------
 
-    function checkForNextLayer() private {
+    function checkForNextLayer(bool _before) private {
         uint8 currentLayer = currentLayerId();
+        // dont really need to check for currentLayer == 0 since this function only gets called when currentLayer > 0
+        LayerInfo storage currentLayerInfo = layer[currentLayer];
+        if (currentLayerInfo.gridsOccupied == gridsPerLayer) {
+            if (currentLayer < totalLayers) offsetLayer++;
+            else {
+                if (_before) revert TPresale__SaleEnded();
+            }
+        }
+    }
+
+    function spreadToReferral(
+        uint8 layerId,
+        address user,
+        address referral
+    ) private {
+        LayerInfo storage currentLayerInfo = layer[layerId];
+        UserLayerInfo storage userInfo = userLayer[layerId][user];
+        // If referral is not set, set it
+        if (
+            userInfo.referral == address(0) &&
+            referral != address(0) &&
+            referral != user
+        ) {
+            userInfo.referral = referral;
+        }
+        if (userInfo.referral == address(0)) return;
+        // If referral is set, spread the referral rewards
+        UserLayerInfo storage referralInfo = userLayer[layerId][referral];
+        referralInfo.totalReferralRewards +=
+            (currentLayerInfo.pricePerGrid *
+                currentLayerInfo.referralBasisPoints) /
+            100;
     }
 
     function _safeTokenTransfer(

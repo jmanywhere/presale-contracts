@@ -104,7 +104,7 @@ interface ITieredPresale {
      *  EVENTS
      *--------------------------------------*/
 
-    event Deposit(address indexed user, uint amount);
+    event Deposit(address indexed user, uint8 layerId);
 
     event ClaimTokens(address indexed user, uint amount);
 
