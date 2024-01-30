@@ -104,11 +104,9 @@ contract TieredPresale is ITieredPresale, Ownable, ReentrancyGuard {
         receiveToken = addressConfig[1];
         saleOwnerWallet = addressConfig[2];
         router = addressConfig[3];
-        console.log("Addresses OK");
         platformFeeReceive = platformConfig[0];
         platformFeeSell = platformConfig[1];
         tokensForLiquidity = platformConfig[2];
-        console.log("platform OK");
         // if (
         //     IUniswapV2Router02(router).WETH() == address(0) ||
         //     gridInfo[1] > 10 ||
@@ -202,6 +200,7 @@ contract TieredPresale is ITieredPresale, Ownable, ReentrancyGuard {
         uint tokensSold = currentLayerInfo.tokensToSell / gridsPerLayer;
         totalTokensSold += tokensSold;
         userInfo.totalTokensToClaim += tokensSold;
+        userInfo.gridsOccupied++;
         // Save the liquidity and referral amounts so they're not claimed by owner
         uint liquidityAmount = (currentLayerInfo.pricePerGrid *
             currentLayerInfo.liquidityBasisPoints) / BASIS_POINTS;
@@ -452,7 +451,7 @@ contract TieredPresale is ITieredPresale, Ownable, ReentrancyGuard {
     // EXTERNAL/PUBLIC VIEW PURE FUNCTIONS
     //-----------------------------------------------------------------------------------
     function currentLayerId() public view returns (uint8) {
-        if (block.number < layer[0].startBlock) return 0;
+        if (block.number < layer[1].startBlock) return 0;
         return offsetLayer;
     }
 

@@ -12,9 +12,16 @@ contract TestPresale is Test {
     Token saleToken;
     Token receiveToken;
 
+    address user1 = makeAddr("user1");
+    address user2 = makeAddr("user2");
+
     function setUp() public {
         saleToken = new Token("Selling", "SELL", 1_000_000 ether);
         receiveToken = new Token("Receive", "RCV", 1_000_000 ether);
+
+        // setup users
+        receiveToken.transfer(user1, 100 ether);
+        receiveToken.transfer(user2, 100 ether);
 
         address[] memory addressConfig = new address[](4);
         // Base layerConfig Addreses EAch exra layer is +3 more items in the number arrays
@@ -60,6 +67,12 @@ contract TestPresale is Test {
             addressConfig,
             platformConfig
         );
+
+        // approve USERS
+        vm.prank(user1);
+        receiveToken.approve(address(presaleWithToken), 100 ether);
+        vm.prank(user2);
+        receiveToken.approve(address(presaleWithToken), 100 ether);
         // WITH NATIVE will be 4 layers
         // uint256[] memory layerCreateInfo = new uint256[](13);
         // uint8[] memory gridInfo = new uint8[](13);
@@ -71,7 +84,7 @@ contract TestPresale is Test {
     }
 
     function checkLayerValues(
-        uint[] memory compareVales,
+        uint[] memory compareValues,
         uint8 layerId
     ) private {
         (
@@ -86,17 +99,16 @@ contract TestPresale is Test {
             uint8 gridsOccupied,
             uint8 prevLayerId
         ) = presaleWithToken.layer(layerId);
-        console.log("Layer: %s", layerId);
-        assertEq(tokensToSell, compareVales[0]);
-        assertEq(pricePerGrid, compareVales[1]);
-        assertEq(startBlock, compareVales[2]);
-        assertEq(endBlock, compareVales[3]);
+        assertEq(tokensToSell, compareValues[0]);
+        assertEq(pricePerGrid, compareValues[1]);
+        assertEq(startBlock, compareValues[2]);
+        assertEq(endBlock, compareValues[3]);
         assertEq(prevRew, 0);
-        assertEq(liquidityBasisPoints, uint8(compareVales[4]));
-        assertEq(referralBasisPoints, uint8(compareVales[5]));
-        assertEq(previousLayerBasisPoints, uint8(compareVales[6]));
-        assertEq(gridsOccupied, uint8(compareVales[7]));
-        assertEq(prevLayerId, uint8(compareVales[8]));
+        assertEq(liquidityBasisPoints, uint8(compareValues[4]));
+        assertEq(referralBasisPoints, uint8(compareValues[5]));
+        assertEq(previousLayerBasisPoints, uint8(compareValues[6]));
+        assertEq(gridsOccupied, uint8(compareValues[7]));
+        assertEq(prevLayerId, uint8(compareValues[8]));
     }
 
     function test_presale_with_token_setup() public {
@@ -104,64 +116,100 @@ contract TestPresale is Test {
         assertEq(presaleWithToken.totalLayers(), 3);
         assertEq(presaleWithToken.totalTokensToSell(), 72000 ether);
 
-        uint[] memory compareVales = new uint[](9);
-        compareVales[0] = 16000 ether; //tokensToSell
-        compareVales[1] = 0.1 ether; //pricePerGrid
-        compareVales[2] = 10; //startBlock
-        compareVales[3] = 1010; //endBlock
-        compareVales[4] = 100; //liquidityBasisPoints
-        compareVales[5] = 0; //referralBasisPoints
-        compareVales[6] = 0; //previousLayerBasisPoints
-        compareVales[7] = 0; //gridsOccupied
-        compareVales[8] = 0; //prevLayerId
-        checkLayerValues(compareVales, 1);
+        uint[] memory compareValues = new uint[](9);
+        compareValues[0] = 16000 ether; //tokensToSell
+        compareValues[1] = 0.1 ether; //pricePerGrid
+        compareValues[2] = 10; //startBlock
+        compareValues[3] = 1010; //endBlock
+        compareValues[4] = 100; //liquidityBasisPoints
+        compareValues[5] = 0; //referralBasisPoints
+        compareValues[6] = 0; //previousLayerBasisPoints
+        compareValues[7] = 0; //gridsOccupied
+        compareValues[8] = 0; //prevLayerId
+        checkLayerValues(compareValues, 1);
 
-        compareVales[0] = 24000 ether; //tokensToSell
-        compareVales[1] = 0.2 ether; //pricePerGrid
-        compareVales[2] = 1010; //startBlock
-        compareVales[3] = 3010; //endBlock
-        compareVales[4] = 50; //liquidityBasisPoints
-        compareVales[5] = 10; //referralBasisPoints
-        compareVales[6] = 20; //previousLayerBasisPoints
-        compareVales[7] = 0; //gridsOccupied
-        compareVales[8] = 1; //prevLayerId
-        checkLayerValues(compareVales, 2);
+        compareValues[0] = 24000 ether; //tokensToSell
+        compareValues[1] = 0.2 ether; //pricePerGrid
+        compareValues[2] = 1010; //startBlock
+        compareValues[3] = 3010; //endBlock
+        compareValues[4] = 50; //liquidityBasisPoints
+        compareValues[5] = 10; //referralBasisPoints
+        compareValues[6] = 20; //previousLayerBasisPoints
+        compareValues[7] = 0; //gridsOccupied
+        compareValues[8] = 1; //prevLayerId
+        checkLayerValues(compareValues, 2);
 
-        compareVales[0] = 32000 ether; //tokensToSell
-        compareVales[1] = 0.3 ether; //pricePerGrid
-        compareVales[2] = 3010; //startBlock
-        compareVales[3] = 6010; //endBlock
-        compareVales[4] = 60; //liquidityBasisPoints
-        compareVales[5] = 10; //referralBasisPoints
-        compareVales[6] = 10; //previousLayerBasisPoints
-        compareVales[7] = 0; //gridsOccupied
-        compareVales[8] = 2; //prevLayerId
-        checkLayerValues(compareVales, 3);
+        compareValues[0] = 32000 ether; //tokensToSell
+        compareValues[1] = 0.3 ether; //pricePerGrid
+        compareValues[2] = 3010; //startBlock
+        compareValues[3] = 6010; //endBlock
+        compareValues[4] = 60; //liquidityBasisPoints
+        compareValues[5] = 10; //referralBasisPoints
+        compareValues[6] = 10; //previousLayerBasisPoints
+        compareValues[7] = 0; //gridsOccupied
+        compareValues[8] = 2; //prevLayerId
+        checkLayerValues(compareValues, 3);
 
-        compareVales[0] = 0;
-        compareVales[1] = 0;
-        compareVales[2] = 0;
-        compareVales[3] = 0;
-        compareVales[4] = 0;
-        compareVales[5] = 0;
-        compareVales[6] = 0;
-        compareVales[7] = 0;
-        compareVales[8] = 0;
-        checkLayerValues(compareVales, 4);
-        compareVales[0] = 0;
-        compareVales[1] = 0;
-        compareVales[2] = 0;
-        compareVales[3] = 0;
-        compareVales[4] = 0;
-        compareVales[5] = 0;
-        compareVales[6] = 0;
-        compareVales[7] = 0;
-        compareVales[8] = 0;
-        checkLayerValues(compareVales, 0);
+        compareValues[0] = 0;
+        compareValues[1] = 0;
+        compareValues[2] = 0;
+        compareValues[3] = 0;
+        compareValues[4] = 0;
+        compareValues[5] = 0;
+        compareValues[6] = 0;
+        compareValues[7] = 0;
+        compareValues[8] = 0;
+        checkLayerValues(compareValues, 4);
+        compareValues[0] = 0;
+        compareValues[1] = 0;
+        compareValues[2] = 0;
+        compareValues[3] = 0;
+        compareValues[4] = 0;
+        compareValues[5] = 0;
+        compareValues[6] = 0;
+        compareValues[7] = 0;
+        compareValues[8] = 0;
+        checkLayerValues(compareValues, 0);
     }
 
     function test_deposit_multiple_users() public {
         // Single user deposits and gets 1 grid allocated
+        vm.expectRevert(); // reason": Sale has not started
+        vm.prank(user1);
+        presaleWithToken.deposit(address(0));
+        // we are in layer 1
+        vm.roll(11);
+
+        vm.prank(user1);
+        presaleWithToken.deposit(address(0));
+
+        // DATA THAT WE WANT TO CHECK
+        // 1 USER HAS ALLOCATED 1 GRID'S WORTH OF SELL TOKENS
+        // userLayerInfo for 1, user 1 has the correct data
+        (
+            uint totalDeposited,
+            uint totalTokensToClaim,
+            uint refRew,
+            address referral,
+            uint8 grids,
+            bool claimed
+        ) = presaleWithToken.userLayer(1, user1);
+        assertEq(totalDeposited, 0.1 ether);
+        assertEq(totalTokensToClaim, 1000 ether);
+        assertEq(refRew, 0);
+        assertEq(referral, address(0));
+        assertEq(grids, 1);
+        assertEq(claimed, false);
+        // 2 users in grid for layer 1 == 1
+        (, , , , , , , , uint8 gridsOccupied, ) = presaleWithToken.layer(1);
+        assertEq(gridsOccupied, 1);
+        // 3 layerUsers 1, 0 == user1
+        assertEq(presaleWithToken.layerUsers(1, 0), user1);
+        // 4 totalTokenssold == 1 grid's worth
+        assertEq(presaleWithToken.totalTokensSold(), 1000 ether);
+        // 5 receiveForLiquidity ==  0.1 ether amount
+        assertEq(presaleWithToken.receiveForLiquidity(), 0.1 ether);
+
         // User deposits on same layer, should get 2 grids allocated
         // User 2 deposits on same layer, should get 1 grids allocated
     }
