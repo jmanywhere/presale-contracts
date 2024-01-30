@@ -30,6 +30,14 @@ contract TieredPresale is ITieredPresale, Ownable, ReentrancyGuard {
     uint256 public receiveForLiquidity;
     uint256 public receiveForReferral;
     uint256 public receiveForPrevLayer;
+    //-----------------------
+    uint256 public receiveForPlatform;
+    // percentage that goes to the platform in form of tokens TO RECEIVE
+    uint256 public platformFeeReceive;
+    // percentage that goes to the platform in form of tokens TO SELL
+    uint256 public platformFeeSell;
+    //-----------------------
+
     address public saleToken;
     address public receiveToken;
     address public saleoOwnerWallet;
@@ -145,9 +153,13 @@ contract TieredPresale is ITieredPresale, Ownable, ReentrancyGuard {
     // EXTERNAL/PUBLIC FUNCTIONS
     //-----------------------------------------------------------------------------------
 
-    function deposit(address referral) external payable {
-        if (currentLayerId() == 0 || saleStatus() != Status.IN_PROGRESS) {
-            revert TPresale__InvalidSetup();
+    function deposit(address referral) external payable nonReentrant {
+        if (
+            currentLayerId() == 0 ||
+            saleStatus() != Status.IN_PROGRESS ||
+            canFinalize()
+        ) {
+            revert TPresale__SaleEnded();
         }
         // checks that the offset is shifted to the next layer
         checkForNextLayer(true);
@@ -168,15 +180,13 @@ contract TieredPresale is ITieredPresale, Ownable, ReentrancyGuard {
         spreadToReferral(offsetLayer, msg.sender, referral);
 
         // Set the Reward amount for the previous layer
+        // only works for layer 2 and above
         if (offsetLayer > 1) {
-            // get the amount to assign the previous layer
-            LayerInfo storage prevLayer = layer[offsetLayer - 1];
-            uint prevLayerRewardAmount = (currentLayerInfo.pricePerGrid *
-                currentLayerInfo.previousLayerBasisPoints) / BASIS_POINTS;
-            if (prevLayerRewardAmount > 0 && prevLayer.gridsOccupied > 0) {
-                prevLayer.prevRewardAmount += prevLayerRewardAmount;
-                receiveForPrevLayer += prevLayerRewardAmount;
-            }
+            _spreadPrev(
+                (currentLayerInfo.pricePerGrid *
+                    currentLayerInfo.previousLayerBasisPoints) / BASIS_POINTS,
+                offsetLayer - 1
+            );
         }
 
         // Check that enough tokens where sent to buy a grid with native
@@ -196,50 +206,7 @@ contract TieredPresale is ITieredPresale, Ownable, ReentrancyGuard {
         checkForNextLayer(false);
     }
 
-    //-----------------------------------------------------------------------------------
-    // INTERNAL/PRIVATE FUNCTIONS
-    //-----------------------------------------------------------------------------------
-    //-----------------------------------------------------------------------------------
-    // EXTERNAL/PUBLIC VIEW PURE FUNCTIONS
-    //-----------------------------------------------------------------------------------
-    function currentLayerId() public view returns (uint8) {
-        if (block.number < layer[0].startBlock) return 0;
-        return offsetLayer;
-    }
-
-    function saleStatus() public view returns (Status) {
-        if (status == Status.PENDING && block.number >= layer[0].startBlock) {
-            return Status.IN_PROGRESS;
-        }
-        return status;
-    }
-
-    function usersOnLayer(
-        uint8 layerId
-    ) external view returns (address[] memory) {
-        return layerUsers[layerId];
-    }
-
-    function rewardsToClaim(
-        uint8 layerId,
-        address user
-    )
-        public
-        view
-        returns (uint256 depositClaim, uint referralTokens, uint layerTokens)
-    {
-        UserLayerInfo storage userInfo = userLayer[layerId][user];
-        LayerInfo storage layerStatus = layer[layerId];
-        depositClaim = userInfo.totalTokensToClaim;
-        referralTokens = userInfo.totalReferralRewards;
-        if (layerStatus.gridsOccupied == 0) layerTokens = 0;
-        else
-            layerTokens =
-                (layerStatus.prevRewardAmount * userInfo.gridsOccupied) /
-                layerStatus.gridsOccupied;
-    }
-
-    function claimTokensAndRewards() external {
+    function claimTokensAndRewards() external nonReentrant {
         if (status != Status.COMPLETED) revert TPresale__SaleNotEnded();
         uint256 totalPrizeTokens = 0;
         uint256 totalReferralTokens = 0;
@@ -280,14 +247,16 @@ contract TieredPresale is ITieredPresale, Ownable, ReentrancyGuard {
         }
     }
 
-    function canFinalize() external view returns (bool) {
-        return
-            status == Status.COMPLETED ||
-            block.number > layer[totalLayers].endBlock;
+    function finalizeSale() external onlyOwner {
+        if (!canFinalize()) revert TPresale__SaleNotEnded();
+        status = Status.COMPLETED;
+        // create liquidity
+        // transfer rest of tokens to owner
+        emit SaleEnded(block.timestamp);
     }
 
     //-----------------------------------------------------------------------------------
-    // INTERNAL/PRIVATE VIEW PURE FUNCTIONS
+    // INTERNAL/PRIVATE FUNCTIONS
     //-----------------------------------------------------------------------------------
 
     function checkForNextLayer(bool _before) private {
@@ -362,6 +331,81 @@ contract TieredPresale is ITieredPresale, Ownable, ReentrancyGuard {
         if (!succ) revert TPresale__CouldNotTransfer(token, amount);
     }
 
+    function _spreadPrev(uint amount, uint8 receiveLayer) private {
+        if (amount == 0) return;
+        LayerInfo storage layerInfo = layer[receiveLayer];
+        if (layerInfo.gridsOccupied > 0) {
+            // If the layer has deposits, spread the amount to the previous layer
+            if (receiveLayer > 1) {
+                uint nextRoundAmount = (amount *
+                    layerInfo.previousLayerBasisPoints) / BASIS_POINTS;
+                amount -= nextRoundAmount;
+                _spreadPrev(nextRoundAmount, receiveLayer - 1);
+            }
+            layerInfo.prevRewardAmount += amount;
+        }
+        // If the layer has no deposits, send the amount to the next layer
+        else {
+            if (receiveLayer > 1) _spreadPrev(amount, receiveLayer - 1);
+            else receiveForPrevLayer += amount;
+        }
+    }
+
+    //-----------------------------------------------------------------------------------
+    // EXTERNAL/PUBLIC VIEW PURE FUNCTIONS
+    //-----------------------------------------------------------------------------------
+    function currentLayerId() public view returns (uint8) {
+        if (block.number < layer[0].startBlock) return 0;
+        return offsetLayer;
+    }
+
+    function saleStatus() public view returns (Status) {
+        if (status == Status.PENDING && block.number >= layer[0].startBlock) {
+            return Status.IN_PROGRESS;
+        }
+        return status;
+    }
+
+    function usersOnLayer(
+        uint8 layerId
+    ) external view returns (address[] memory) {
+        return layerUsers[layerId];
+    }
+
+    function rewardsToClaim(
+        uint8 layerId,
+        address user
+    )
+        public
+        view
+        returns (uint256 depositClaim, uint referralTokens, uint layerTokens)
+    {
+        UserLayerInfo storage userInfo = userLayer[layerId][user];
+        LayerInfo storage layerStatus = layer[layerId];
+        depositClaim = userInfo.totalTokensToClaim;
+        referralTokens = userInfo.totalReferralRewards;
+        if (layerStatus.gridsOccupied == 0) layerTokens = 0;
+        else
+            layerTokens =
+                (layerStatus.prevRewardAmount * userInfo.gridsOccupied) /
+                layerStatus.gridsOccupied;
+    }
+
+    function canFinalize() public view returns (bool) {
+        return
+            status == Status.COMPLETED ||
+            block.number > layer[totalLayers].endBlock;
+    }
+
+    function nextLayerId() external view returns (uint8) {
+        if (offsetLayer == totalLayers) return offsetLayer;
+        return offsetLayer + 1;
+    }
+
+    //-----------------------------------------------------------------------------------
+    // INTERNAL/PRIVATE VIEW PURE FUNCTIONS
+    //-----------------------------------------------------------------------------------
+
     //-----------------------------------------------------------------------------------
     // @TODO FUNCTIONS
     //-----------------------------------------------------------------------------------
@@ -390,13 +434,9 @@ contract TieredPresale is ITieredPresale, Ownable, ReentrancyGuard {
         uint8 previousLayerBasisPoints
     ) external {}
 
-    function nextLayerId() external view returns (uint8) {}
-
     function totalTokensToClaim() external view returns (uint256) {}
 
     function tokensToClaimPerLayer(
         uint8 layerId
     ) external view returns (uint256) {}
-
-    function finalizeSale() external {}
 }
