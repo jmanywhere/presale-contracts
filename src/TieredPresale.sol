@@ -30,9 +30,9 @@ contract TieredPresale is ITieredPresale, Ownable, ReentrancyGuard {
     uint256 public receiveForLiquidity;
     uint256 public receiveForReferral;
     uint256 public receiveForPrevLayer;
+    uint256 public totalTokensSold;
+    uint256 public tokensForLiquidity;
     //-----------------------
-    uint256 public receiveForPlatform;
-    // percentage that goes to the platform in form of tokens TO RECEIVE
     uint256 public platformFeeReceive;
     // percentage that goes to the platform in form of tokens TO SELL
     uint256 public platformFeeSell;
@@ -40,7 +40,7 @@ contract TieredPresale is ITieredPresale, Ownable, ReentrancyGuard {
 
     address public saleToken;
     address public receiveToken;
-    address public saleoOwnerWallet;
+    address public saleOwnerWallet;
     address public router;
     uint256 public uniqueInvestorCount;
     uint8 public immutable totalLayers;
@@ -49,13 +49,21 @@ contract TieredPresale is ITieredPresale, Ownable, ReentrancyGuard {
     Status private status = Status.PENDING;
 
     //-----------------------------------------------------------------------------------
+    // MODIFIERS
+    //-----------------------------------------------------------------------------------
+    modifier onlySaleOwner() {
+        if (msg.sender != saleOwnerWallet) revert TPresale__InvalidSetup();
+        _;
+    }
+
+    //-----------------------------------------------------------------------------------
     // CONSTRUCTOR
     //-----------------------------------------------------------------------------------
     /**
      * @notice CONSTRUCTOR
      * @param gridInfo Grid settings
      * [0] totalLayers
-     * [1] totalGridsPerLayer
+     * [1] gridSize
      * LAYER ONE
      * [2] liquidityBasisPoints
      * [3] referralBasisPoints
@@ -78,19 +86,32 @@ contract TieredPresale is ITieredPresale, Ownable, ReentrancyGuard {
      * [1] receiveToken
      * [2] saleOwner
      * [3] routerToUse
+     * @param platformConfig Configurations for fees and token amount used for liquidity
+     * [0] platformFeeReceive
+     * [1] platformFeeSell
+     * [2] tokensToAddForLiquidity
      */
     constructor(
         uint8[] memory gridInfo,
         uint256[] memory layerCreateInfo,
-        address[] memory addressConfig
+        address[] memory addressConfig,
+        uint256[] memory platformConfig
     ) Ownable(msg.sender) {
         saleToken = addressConfig[0];
         receiveToken = addressConfig[1];
+        saleOwnerWallet = addressConfig[2];
         router = addressConfig[3];
-        if (IUniswapV2Router02(router).WETH() == address(0))
-            revert TPresale__InvalidSetup();
+
+        platformFeeReceive = platformConfig[0];
+        platformFeeSell = platformConfig[1];
+        tokensForLiquidity = platformConfig[2];
+        if (
+            IUniswapV2Router02(router).WETH() == address(0) ||
+            gridInfo[1] > 10 ||
+            gridInfo[1] < 1
+        ) revert TPresale__InvalidSetup();
         totalLayers = gridInfo[0];
-        gridsPerLayer = gridInfo[1];
+        gridsPerLayer = gridInfo[1] ** 2;
         // Check the Grid Info has the correct length
         uint256 configLength = gridInfo.length;
 
@@ -107,7 +128,7 @@ contract TieredPresale is ITieredPresale, Ownable, ReentrancyGuard {
 
         // SETUP LAYER 1 - Layer 0 is always empty
         LayerInfo storage setupLayer = layer[1];
-        uint256 totalGridsPerLayer = uint256(gridsPerLayer) ** 2;
+        uint256 totalGridsPerLayer = uint256(gridsPerLayer);
         uint tokensToSell = layerCreateInfo[3] * totalGridsPerLayer;
         uint totalTokens = tokensToSell;
         // Setup LAYER 1
@@ -170,9 +191,9 @@ contract TieredPresale is ITieredPresale, Ownable, ReentrancyGuard {
         layerUsers[offsetLayer][currentLayerInfo.gridsOccupied - 1] = msg
             .sender;
         userInfo.totalDeposit += currentLayerInfo.pricePerGrid;
-        userInfo.totalTokensToClaim +=
-            currentLayerInfo.tokensToSell /
-            (gridsPerLayer ** 2);
+        uint tokensSold = currentLayerInfo.tokensToSell / gridsPerLayer;
+        totalTokensSold += tokensSold;
+        userInfo.totalTokensToClaim += tokensSold;
         // Save the liquidity and referral amounts so they're not claimed by owner
         uint liquidityAmount = (currentLayerInfo.pricePerGrid *
             currentLayerInfo.liquidityBasisPoints) / BASIS_POINTS;
@@ -207,7 +228,7 @@ contract TieredPresale is ITieredPresale, Ownable, ReentrancyGuard {
     }
 
     function claimTokensAndRewards() external nonReentrant {
-        if (status != Status.COMPLETED) revert TPresale__SaleNotEnded();
+        if (status != Status.FINALIZED) revert TPresale__SaleNotEnded();
         uint256 totalPrizeTokens = 0;
         uint256 totalReferralTokens = 0;
         uint256 totalLayerRewards = 0;
@@ -247,10 +268,67 @@ contract TieredPresale is ITieredPresale, Ownable, ReentrancyGuard {
         }
     }
 
-    function finalizeSale() external onlyOwner {
+    function finalizeSale() external onlySaleOwner nonReentrant {
         if (!canFinalize()) revert TPresale__SaleNotEnded();
-        status = Status.COMPLETED;
-        // create liquidity
+        status = Status.FINALIZED;
+        // Send tokens to platform
+        uint256 fees = (totalTokensSold * platformFeeSell) / BASIS_POINTS;
+        if (fees > 0) {
+            _safeTokenTransfer(saleToken, owner(), fees);
+        }
+        // SAFE APPROVE
+        safeApprove(saleToken, router, tokensForLiquidity);
+        // Send receive fees to platform
+        if (receiveToken == address(0)) {
+            fees = address(this).balance;
+            fees -=
+                receiveForPrevLayer +
+                receiveForReferral +
+                receiveForLiquidity;
+            fees = (fees * platformFeeReceive) / BASIS_POINTS;
+            (bool succ, ) = owner().call{value: fees}("");
+            if (!succ) revert TPresale__CouldNotTransfer(address(0), fees);
+            // create liquidity
+            IUniswapV2Router02(router).addLiquidityETH{
+                value: receiveForLiquidity
+            }(
+                saleToken,
+                0,
+                tokensForLiquidity,
+                receiveForLiquidity,
+                saleOwnerWallet,
+                block.timestamp
+            );
+            uint totalReceived = address(this).balance;
+            totalReceived -= receiveForPrevLayer + receiveForReferral;
+            (succ, ) = saleOwnerWallet.call{value: totalReceived}("");
+            if (!succ)
+                revert TPresale__CouldNotTransfer(address(0), totalReceived);
+        } else {
+            safeApprove(receiveToken, router, receiveForLiquidity);
+            fees = IERC20(receiveToken).balanceOf(address(this));
+            fees -=
+                receiveForPrevLayer +
+                receiveForReferral +
+                receiveForLiquidity;
+            fees = (fees * platformFeeReceive) / BASIS_POINTS;
+            _safeTokenTransfer(receiveToken, owner(), fees);
+            // create liquidity
+            IUniswapV2Router02(router).addLiquidity(
+                saleToken,
+                receiveToken,
+                tokensForLiquidity,
+                receiveForLiquidity,
+                tokensForLiquidity,
+                receiveForLiquidity,
+                saleOwnerWallet,
+                block.timestamp
+            );
+            uint totalReceived = IERC20(receiveToken).balanceOf(address(this));
+            totalReceived -= receiveForPrevLayer + receiveForReferral;
+            _safeTokenTransfer(receiveToken, saleOwnerWallet, totalReceived);
+        }
+
         // transfer rest of tokens to owner
         emit SaleEnded(block.timestamp);
     }
@@ -351,6 +429,17 @@ contract TieredPresale is ITieredPresale, Ownable, ReentrancyGuard {
         }
     }
 
+    function safeApprove(
+        address _token,
+        address _spender,
+        uint amount
+    ) private {
+        (bool succ, ) = _token.call(
+            abi.encodeWithSelector(IERC20.approve.selector, _spender, amount)
+        );
+        if (!succ) revert TPresale__CouldNotTransfer(_token, amount);
+    }
+
     //-----------------------------------------------------------------------------------
     // EXTERNAL/PUBLIC VIEW PURE FUNCTIONS
     //-----------------------------------------------------------------------------------
@@ -393,8 +482,9 @@ contract TieredPresale is ITieredPresale, Ownable, ReentrancyGuard {
 
     function canFinalize() public view returns (bool) {
         return
-            status == Status.COMPLETED ||
-            block.number > layer[totalLayers].endBlock;
+            status != Status.FINALIZED &&
+            (status == Status.COMPLETED ||
+                block.number > layer[totalLayers].endBlock);
     }
 
     function nextLayerId() external view returns (uint8) {
@@ -410,29 +500,35 @@ contract TieredPresale is ITieredPresale, Ownable, ReentrancyGuard {
     // @TODO FUNCTIONS
     //-----------------------------------------------------------------------------------
 
-    function setLayerStartBlock(uint8 layerId, uint256 startBlock) external {}
+    function setLayerStartBlock(
+        uint8 layerId,
+        uint256 startBlock
+    ) external onlySaleOwner {}
 
-    function setLayerDuration(uint8 layerId, uint256 duration) external {}
+    function setLayerDuration(
+        uint8 layerId,
+        uint256 duration
+    ) external onlySaleOwner {}
 
     function setLayerPricePerGrid(
         uint8 layerId,
         uint256 pricePerGrid
-    ) external {}
+    ) external onlySaleOwner {}
 
     function setLayerLiquidityBasisPoints(
         uint8 layerId,
         uint8 liquidityBasisPoints
-    ) external {}
+    ) external onlySaleOwner {}
 
     function setLayerReferralBasisPoints(
         uint8 layerId,
         uint8 referralBasisPoints
-    ) external {}
+    ) external onlySaleOwner {}
 
     function setLayerPreviousLayerBasisPoints(
         uint8 layerId,
         uint8 previousLayerBasisPoints
-    ) external {}
+    ) external onlySaleOwner {}
 
     function totalTokensToClaim() external view returns (uint256) {}
 

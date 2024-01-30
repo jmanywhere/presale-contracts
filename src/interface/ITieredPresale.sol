@@ -7,7 +7,7 @@ interface ITieredPresale {
         PENDING, // sale is not started yet
         IN_PROGRESS, // sale is in progress
         COMPLETED, // sale is completed
-        CANCELLED // sale is cancelled
+        FINALIZED, // sale is already finalized and tokens claimed and added for liquidity
     }
     struct LayerInfo {
         uint256 tokensToSell;
