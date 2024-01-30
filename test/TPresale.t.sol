@@ -16,7 +16,7 @@ contract TestPresale is Test {
         saleToken = new Token("Selling", "SELL", 1_000_000 ether);
         receiveToken = new Token("Receive", "RCV", 1_000_000 ether);
 
-        address[] memory addressConfig = new address[](3);
+        address[] memory addressConfig = new address[](4);
         // Base layerConfig Addreses EAch exra layer is +3 more items in the number arrays
         uint256[] memory layerCreateInfo = new uint256[](10);
         uint8[] memory gridInfo = new uint8[](10);
@@ -46,6 +46,7 @@ contract TestPresale is Test {
         addressConfig[0] = address(saleToken);
         addressConfig[1] = address(receiveToken);
         addressConfig[2] = address(this);
+        addressConfig[3] = 0xC532a74256D3Db42D0Bf7a0400fEFDbad7694008;
 
         uint[] memory platformConfig = new uint[](3);
         platformConfig[0] = 1; //receiveFee;
@@ -85,7 +86,7 @@ contract TestPresale is Test {
             uint8 gridsOccupied,
             uint8 prevLayerId
         ) = presaleWithToken.layer(layerId);
-
+        console.log("Layer: %s", layerId);
         assertEq(tokensToSell, compareVales[0]);
         assertEq(pricePerGrid, compareVales[1]);
         assertEq(startBlock, compareVales[2]);
