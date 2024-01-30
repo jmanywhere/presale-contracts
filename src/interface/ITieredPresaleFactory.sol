@@ -5,19 +5,11 @@ interface ITieredPresaleFactory {
     /**
      * @dev Creates a new presale contract and registers it in the factory.
      */
-    function createPresale() external returns (address);
-
-    /**
-     * @notice Ends the sale of a presale contract.
-     * this one should be called by owner of presale contract to end the sale.
-     */
-    function cancelSale(address presale) external;
+    function createPresale() external payable returns (address);
 
     function getInProgress() external view returns (address[] memory);
 
     function getCompleted() external view returns (address[] memory);
-
-    function getCancelled() external view returns (address[] memory);
 
     function getAll() external view returns (address[] memory);
 
