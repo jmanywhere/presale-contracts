@@ -47,11 +47,17 @@ contract TestPresale is Test {
         addressConfig[1] = address(receiveToken);
         addressConfig[2] = address(this);
 
+        uint[] memory platformConfig = new uint[](3);
+        platformConfig[0] = 1; //receiveFee;
+        platformConfig[1] = 2; //tokensFee;
+        platformConfig[2] = 100_000 ether; //all tokens to add to liquidity;
+
         // WITH TOKEN will be 3 layers
         presaleWithToken = new TieredPresale(
             gridInfo,
             layerCreateInfo,
-            addressConfig
+            addressConfig,
+            platformConfig
         );
         // WITH NATIVE will be 4 layers
         // uint256[] memory layerCreateInfo = new uint256[](13);

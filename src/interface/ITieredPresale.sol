@@ -7,7 +7,7 @@ interface ITieredPresale {
         PENDING, // sale is not started yet
         IN_PROGRESS, // sale is in progress
         COMPLETED, // sale is completed
-        FINALIZED, // sale is already finalized and tokens claimed and added for liquidity
+        FINALIZED // sale is already finalized and tokens claimed and added for liquidity
     }
     struct LayerInfo {
         uint256 tokensToSell;
@@ -71,12 +71,6 @@ interface ITieredPresale {
 
     function nextLayerId() external view returns (uint8);
 
-    function totalTokensToClaim() external view returns (uint256);
-
-    function tokensToClaimPerLayer(
-        uint8 layerId
-    ) external view returns (uint256);
-
     function saleToken() external view returns (address);
 
     function receiveToken() external view returns (address);
@@ -117,4 +111,29 @@ interface ITieredPresale {
     event LayerCompleted(uint8 indexed layerId);
 
     event SaleEnded(uint timestamp);
+
+    event LayerStartBlockChanged(uint8 indexed layerId, uint256 newStartBlock);
+
+    event LayerDurationChanged(uint8 indexed layerId, uint256 newDuration);
+
+    event LayerPricePerGridChanged(
+        uint8 indexed layerId,
+        uint256 newPricePerGrid
+    );
+
+    event LayerLiquidityBasisPointsChanged(
+        uint8 indexed layerId,
+        uint8 newLiquidityBasisPoints
+    );
+
+    event LayerReferralBasisPointsChanged(
+        uint8 indexed layerId,
+        uint8 newReferralBasisPoints
+    );
+
+    event LayerPreviousLayerBasisPointsChanged(
+        uint8 indexed layerId,
+        uint8 newPreviousLayerBasisPoints
+    );
+    event TotalTokensForLiquidityChanged(uint256 newTotalTokensForLiquidity);
 }

@@ -11,6 +11,8 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
 import "forge-std/console.sol";
 
 error TPresale__InvalidSetup();
+error TPresale__InProgress();
+error TPresale__NotStarted();
 error TPresale__CouldNotTransfer(address _token, uint amount);
 error TPresale__SaleEnded();
 error TPresale__SaleNotEnded();
@@ -185,6 +187,10 @@ contract TieredPresale is ITieredPresale, Ownable, ReentrancyGuard {
         // checks that the offset is shifted to the next layer
         checkForNextLayer(true);
         LayerInfo storage currentLayerInfo = layer[offsetLayer];
+        // checks that layer has started
+        if (currentLayerInfo.startBlock > block.number)
+            revert TPresale__NotStarted();
+
         UserLayerInfo storage userInfo = userLayer[offsetLayer][msg.sender];
 
         currentLayerInfo.gridsOccupied++;
@@ -492,47 +498,71 @@ contract TieredPresale is ITieredPresale, Ownable, ReentrancyGuard {
         return offsetLayer + 1;
     }
 
-    //-----------------------------------------------------------------------------------
-    // INTERNAL/PRIVATE VIEW PURE FUNCTIONS
-    //-----------------------------------------------------------------------------------
-
-    //-----------------------------------------------------------------------------------
-    // @TODO FUNCTIONS
-    //-----------------------------------------------------------------------------------
-
     function setLayerStartBlock(
         uint8 layerId,
         uint256 startBlock
-    ) external onlySaleOwner {}
+    ) external onlySaleOwner {
+        LayerInfo storage layerInfo = layer[layerId];
+        if (layerInfo.startBlock < block.number) revert TPresale__InProgress();
+        layerInfo.startBlock = startBlock;
+        emit LayerStartBlockChanged(layerId, startBlock);
+    }
 
     function setLayerDuration(
         uint8 layerId,
         uint256 duration
-    ) external onlySaleOwner {}
+    ) external onlySaleOwner {
+        LayerInfo storage layerInfo = layer[layerId];
+        if (layerInfo.startBlock < block.number) revert TPresale__InProgress();
+        layerInfo.endBlock = layerInfo.startBlock + duration;
+        emit LayerDurationChanged(layerId, duration);
+    }
 
     function setLayerPricePerGrid(
         uint8 layerId,
         uint256 pricePerGrid
-    ) external onlySaleOwner {}
+    ) external onlySaleOwner {
+        LayerInfo storage layerInfo = layer[layerId];
+        if (layerInfo.startBlock < block.number) revert TPresale__InProgress();
+        layerInfo.pricePerGrid = pricePerGrid;
+        emit LayerPricePerGridChanged(layerId, pricePerGrid);
+    }
 
     function setLayerLiquidityBasisPoints(
         uint8 layerId,
         uint8 liquidityBasisPoints
-    ) external onlySaleOwner {}
+    ) external onlySaleOwner {
+        LayerInfo storage layerInfo = layer[layerId];
+        if (layerInfo.startBlock < block.number) revert TPresale__InProgress();
+        layerInfo.liquidityBasisPoints = liquidityBasisPoints;
+        emit LayerLiquidityBasisPointsChanged(layerId, liquidityBasisPoints);
+    }
 
     function setLayerReferralBasisPoints(
         uint8 layerId,
         uint8 referralBasisPoints
-    ) external onlySaleOwner {}
+    ) external onlySaleOwner {
+        LayerInfo storage layerInfo = layer[layerId];
+        if (layerInfo.startBlock < block.number) revert TPresale__InProgress();
+        layerInfo.referralBasisPoints = referralBasisPoints;
+        emit LayerReferralBasisPointsChanged(layerId, referralBasisPoints);
+    }
 
     function setLayerPreviousLayerBasisPoints(
         uint8 layerId,
         uint8 previousLayerBasisPoints
-    ) external onlySaleOwner {}
+    ) external onlySaleOwner {
+        LayerInfo storage layerInfo = layer[layerId];
+        if (layerInfo.startBlock < block.number) revert TPresale__InProgress();
+        layerInfo.previousLayerBasisPoints = previousLayerBasisPoints;
+        emit LayerPreviousLayerBasisPointsChanged(
+            layerId,
+            previousLayerBasisPoints
+        );
+    }
 
-    function totalTokensToClaim() external view returns (uint256) {}
-
-    function tokensToClaimPerLayer(
-        uint8 layerId
-    ) external view returns (uint256) {}
+    function setTotalTokensForLiquity(uint256 amount) external onlySaleOwner {
+        tokensForLiquidity = amount;
+        emit TotalTokensForLiquidityChanged(amount);
+    }
 }
