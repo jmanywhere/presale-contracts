@@ -356,6 +356,9 @@ contract TieredPresale is ITieredPresale, Ownable, ReentrancyGuard {
             if (currentLayer < totalLayers) {
                 emit LayerCompleted(currentLayer);
                 offsetLayer++;
+                currentLayerInfo = layer[offsetLayer];
+                if (currentLayerInfo.endBlock <= block.number)
+                    checkForNextLayer(_before);
             } else {
                 if (_before) revert TPresale__SaleEnded();
                 status = Status.COMPLETED;

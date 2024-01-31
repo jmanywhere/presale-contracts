@@ -24,6 +24,9 @@ contract TestPresale is Test {
         receiveToken.transfer(user1, 100 ether);
         receiveToken.transfer(user2, 100 ether);
         receiveToken.transfer(user3, 100 ether);
+        vm.deal(user1, 100 ether);
+        vm.deal(user2, 100 ether);
+        vm.deal(user3, 100 ether);
 
         address[] memory addressConfig = new address[](4);
         // Base layerConfig Addreses EAch exra layer is +3 more items in the number arrays
@@ -79,13 +82,43 @@ contract TestPresale is Test {
         receiveToken.approve(address(presaleWithToken), 100 ether);
 
         // WITH NATIVE will be 4 layers
-        // uint256[] memory layerCreateInfo = new uint256[](13);
-        // uint8[] memory gridInfo = new uint8[](13);
-        // presaleWithNative = new TieredPresale(
-        //     gridInfo,
-        //     layerCreateInfo,
-        //     addressConfig
-        // );
+        layerCreateInfo = new uint256[](13);
+        gridInfo = new uint8[](13);
+        gridInfo[0] = 4; //totalLayers
+        gridInfo[1] = 2; //totalGridsPerLayer 2x2
+        // tokens to sell = grids of 16 slots
+        gridInfo[2] = 99; //liquidityBasisPoints
+        gridInfo[3] = 1; //referralBasisPoints
+        gridInfo[4] = 50; //liquidityBasisPoints
+        gridInfo[5] = 10; //referralBasisPoints
+        gridInfo[6] = 20; //previousLayerBasisPoints
+        gridInfo[7] = 60; //liquidityBasisPoints
+        gridInfo[8] = 10; //referralBasisPoints
+        gridInfo[9] = 10; //previousLayerBasisPoints
+        gridInfo[10] = 60; //liquidityBasisPoints
+        gridInfo[11] = 10; //referralBasisPoints
+        gridInfo[12] = 10; //previousLayerBasisPoints
+        addressConfig[1] = address(0);
+        layerCreateInfo[0] = 10; //startBlock
+        layerCreateInfo[1] = 1000; //blockDuration
+        layerCreateInfo[2] = 0.1 ether; //pricePerGrid
+        layerCreateInfo[3] = 1000 ether; //tokensPerGrid
+        layerCreateInfo[4] = 2000; //blockDuration
+        layerCreateInfo[5] = 0.2 ether; //pricePerGrid
+        layerCreateInfo[6] = 1500 ether; //tokensPerGrid
+        layerCreateInfo[7] = 3000; //blockDuration
+        layerCreateInfo[8] = 0.3 ether; //pricePerGrid
+        layerCreateInfo[9] = 2000 ether; //tokensPerGrid
+        layerCreateInfo[10] = 4000; //blockDuration
+        layerCreateInfo[11] = 0.4 ether; //pricePerGrid
+        layerCreateInfo[12] = 2500 ether; //tokensPerGrid
+
+        presaleWithNative = new TieredPresale(
+            gridInfo,
+            layerCreateInfo,
+            addressConfig,
+            platformConfig
+        );
     }
 
     function checkLayerValues(
@@ -430,5 +463,37 @@ contract TestPresale is Test {
         vm.expectRevert(TPresale__SaleEnded.selector);
         vm.prank(user3);
         presaleWithToken.deposit(address(0));
+    }
+
+    function test_deposit_native() public {
+        vm.roll(10);
+
+        vm.prank(user1);
+        presaleWithNative.deposit{value: 0.1 ether}(user2);
+
+        (, , , address ref, , ) = presaleWithNative.userLayer(1, user1);
+        (, , uint refRew, , , ) = presaleWithNative.userLayer(1, user2);
+
+        assertEq(ref, user2);
+        assertEq(refRew, 0.001 ether);
+
+        vm.roll(3010);
+        assertEq(presaleWithNative.currentLayerId(), 1);
+        vm.prank(user1);
+        presaleWithNative.deposit{value: 0.3 ether}(address(0));
+        (uint userDeposit, , , , , ) = presaleWithNative.userLayer(3, user1);
+        assertEq(userDeposit, 0.3 ether);
+        (, , , , uint prevRew, , , , , ) = presaleWithNative.layer(1);
+        assertEq(prevRew, 0.3 ether / 10);
+
+        vm.roll(6011);
+        vm.prank(user1);
+        presaleWithNative.deposit{value: 0.4 ether}(address(0));
+        (, , , , prevRew, , , , , ) = presaleWithNative.layer(1);
+        assertEq(prevRew, (0.3 ether / 10) + (0.4 ether / 100));
+        (, , , , prevRew, , , , , ) = presaleWithNative.layer(2);
+        assertEq(prevRew, 0);
+        (, , , , prevRew, , , , , ) = presaleWithNative.layer(3);
+        assertEq(prevRew, 0.036 ether);
     }
 }
