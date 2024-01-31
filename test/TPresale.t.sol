@@ -17,6 +17,7 @@ contract TestPresale is Test {
     address user1 = makeAddr("user1");
     address user2 = makeAddr("user2");
     address user3 = makeAddr("user3");
+    address user4 = makeAddr("user4");
     address protocol = makeAddr("protocol");
 
     receive() external payable {}
@@ -642,6 +643,117 @@ contract TestPresale is Test {
             address(presaleWithNative).balance,
             presaleWithNative.receiveForReferral() +
                 presaleWithNative.receiveForPrevLayer()
+        );
+    }
+
+    function test_user_claims() public {
+        vm.roll(10);
+        vm.startPrank(user1);
+        for (uint8 i = 0; i < 4; i++) {
+            presaleWithNative.deposit{value: 0.1 ether}(address(0));
+        }
+        vm.stopPrank();
+        vm.roll(1050);
+        vm.startPrank(user2);
+        for (uint8 i = 0; i < 4; i++) {
+            presaleWithNative.deposit{value: 0.2 ether}(user1);
+        }
+
+        vm.stopPrank();
+
+        vm.roll(3050);
+        vm.prank(user3);
+        presaleWithNative.deposit{value: 0.3 ether}(user4);
+        vm.roll(10050);
+
+        saleToken.transfer(
+            address(presaleWithNative),
+            presaleWithNative.totalTokensNeededToFinalize()
+        );
+        console.log("Receive Balance: %s", address(presaleWithNative).balance);
+        presaleWithNative.finalizeSale();
+        console.log(
+            "Receive Balance After Finalize: %s",
+            address(presaleWithNative).balance
+        );
+        console.log(
+            "receive for referrals",
+            presaleWithNative.receiveForReferral()
+        );
+        // We need to know how much trickled down to layer 1 as rewards
+        uint prevL2Rewards = uint(0.3 ether) / 10;
+        uint prevL1Rewards = prevL2Rewards / 5;
+        prevL2Rewards -= prevL1Rewards;
+        prevL1Rewards += uint(0.2 ether * 4) / 5;
+
+        (, , , , uint prevRew, , , , , ) = presaleWithNative.layer(1);
+        console.log("L1 prevRewards Check");
+        assertEq(prevRew, prevL1Rewards);
+        (, , , , prevRew, , , , , ) = presaleWithNative.layer(2);
+        console.log("L2 prevRewards Check");
+        assertEq(prevRew, prevL2Rewards);
+
+        // User 1 claims referral and prevlayer rewards and tokens bought
+        uint saleTokenBalance = saleToken.balanceOf(user1);
+        uint receiveTokenBalance = user1.balance;
+
+        vm.prank(user1);
+        presaleWithNative.claimTokensAndRewards();
+
+        console.log("U1 Sale Balance Check");
+        assertEq(saleToken.balanceOf(user1), saleTokenBalance + 4000 ether);
+        console.log("U1 Rewards Balance Check");
+        assertEq(
+            user1.balance,
+            receiveTokenBalance +
+                // calculate referral rewards
+                ((0.2 ether * 4) / 10) +
+                // calculate prevLayer rewards
+                prevL1Rewards
+        );
+        // user 1 cant claim twice
+        vm.expectRevert(TPresale__CantClaim.selector);
+        vm.prank(user1);
+        presaleWithNative.claimTokensAndRewards();
+        // user 2 should be able to claim tokens bought + prevLayer rewards
+        saleTokenBalance = saleToken.balanceOf(user2);
+        receiveTokenBalance = user2.balance;
+
+        vm.prank(user2);
+        presaleWithNative.claimTokensAndRewards();
+
+        console.log("U2 Sale Balance Check");
+        assertEq(saleToken.balanceOf(user2), saleTokenBalance + 6000 ether);
+        console.log("U2 Rewards Balance Check");
+        assertEq(
+            user2.balance,
+            receiveTokenBalance +
+                // calculate prevLayer rewards
+                prevL2Rewards
+        );
+        // user 3 should be able to claim tokens bought
+        saleTokenBalance = saleToken.balanceOf(user3);
+        receiveTokenBalance = user3.balance;
+        vm.prank(user3);
+        presaleWithNative.claimTokensAndRewards();
+        console.log("U3 Sale Balance Check");
+
+        assertEq(saleToken.balanceOf(user3), saleTokenBalance + 2000 ether);
+        console.log("U3 Rewards Balance Check");
+        assertEq(user3.balance, receiveTokenBalance);
+        // user 4 should be able to claim referral rewards only
+        receiveTokenBalance = user4.balance;
+        vm.prank(user4);
+        presaleWithNative.claimTokensAndRewards();
+        console.log("U4 Sale Balance Check");
+
+        assertEq(saleToken.balanceOf(user4), 0);
+        console.log("U4 Rewards Balance Check");
+        assertEq(
+            user4.balance,
+            receiveTokenBalance +
+                // calculate referral rewards
+                (0.3 ether / 10)
         );
     }
 }

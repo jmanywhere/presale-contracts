@@ -361,6 +361,74 @@ contract TieredPresale is ITieredPresale, Ownable, ReentrancyGuard {
         emit SaleEnded(block.timestamp);
     }
 
+    function setLayerStartBlock(
+        uint8 layerId,
+        uint256 startBlock
+    ) external onlySaleOwner {
+        LayerInfo storage layerInfo = layer[layerId];
+        if (layerInfo.startBlock < block.number) revert TPresale__InProgress();
+        layerInfo.startBlock = startBlock;
+        emit LayerStartBlockChanged(layerId, startBlock);
+    }
+
+    function setLayerDuration(
+        uint8 layerId,
+        uint256 duration
+    ) external onlySaleOwner {
+        LayerInfo storage layerInfo = layer[layerId];
+        if (layerInfo.startBlock < block.number) revert TPresale__InProgress();
+        layerInfo.endBlock = layerInfo.startBlock + duration;
+        emit LayerDurationChanged(layerId, duration);
+    }
+
+    function setLayerPricePerGrid(
+        uint8 layerId,
+        uint256 pricePerGrid
+    ) external onlySaleOwner {
+        LayerInfo storage layerInfo = layer[layerId];
+        if (layerInfo.startBlock < block.number) revert TPresale__InProgress();
+        layerInfo.pricePerGrid = pricePerGrid;
+        emit LayerPricePerGridChanged(layerId, pricePerGrid);
+    }
+
+    function setLayerLiquidityBasisPoints(
+        uint8 layerId,
+        uint8 liquidityBasisPoints
+    ) external onlySaleOwner {
+        LayerInfo storage layerInfo = layer[layerId];
+        if (layerInfo.startBlock < block.number) revert TPresale__InProgress();
+        layerInfo.liquidityBasisPoints = liquidityBasisPoints;
+        emit LayerLiquidityBasisPointsChanged(layerId, liquidityBasisPoints);
+    }
+
+    function setLayerReferralBasisPoints(
+        uint8 layerId,
+        uint8 referralBasisPoints
+    ) external onlySaleOwner {
+        LayerInfo storage layerInfo = layer[layerId];
+        if (layerInfo.startBlock < block.number) revert TPresale__InProgress();
+        layerInfo.referralBasisPoints = referralBasisPoints;
+        emit LayerReferralBasisPointsChanged(layerId, referralBasisPoints);
+    }
+
+    function setLayerPreviousLayerBasisPoints(
+        uint8 layerId,
+        uint8 previousLayerBasisPoints
+    ) external onlySaleOwner {
+        LayerInfo storage layerInfo = layer[layerId];
+        if (layerInfo.startBlock < block.number) revert TPresale__InProgress();
+        layerInfo.previousLayerBasisPoints = previousLayerBasisPoints;
+        emit LayerPreviousLayerBasisPointsChanged(
+            layerId,
+            previousLayerBasisPoints
+        );
+    }
+
+    function setTotalTokensForLiquity(uint256 amount) external onlySaleOwner {
+        tokensForLiquidity = amount;
+        emit TotalTokensForLiquidityChanged(amount);
+    }
+
     //-----------------------------------------------------------------------------------
     // INTERNAL/PRIVATE FUNCTIONS
     //-----------------------------------------------------------------------------------
@@ -452,6 +520,7 @@ contract TieredPresale is ITieredPresale, Ownable, ReentrancyGuard {
                 _spreadPrev(nextRoundAmount, receiveLayer - 1);
             }
             layerInfo.prevRewardAmount += amount;
+            receiveForPrevLayer += amount;
         }
         // If the layer has no deposits, send the amount to the next layer
         else {
@@ -523,71 +592,10 @@ contract TieredPresale is ITieredPresale, Ownable, ReentrancyGuard {
         return offsetLayer + 1;
     }
 
-    function setLayerStartBlock(
-        uint8 layerId,
-        uint256 startBlock
-    ) external onlySaleOwner {
-        LayerInfo storage layerInfo = layer[layerId];
-        if (layerInfo.startBlock < block.number) revert TPresale__InProgress();
-        layerInfo.startBlock = startBlock;
-        emit LayerStartBlockChanged(layerId, startBlock);
-    }
-
-    function setLayerDuration(
-        uint8 layerId,
-        uint256 duration
-    ) external onlySaleOwner {
-        LayerInfo storage layerInfo = layer[layerId];
-        if (layerInfo.startBlock < block.number) revert TPresale__InProgress();
-        layerInfo.endBlock = layerInfo.startBlock + duration;
-        emit LayerDurationChanged(layerId, duration);
-    }
-
-    function setLayerPricePerGrid(
-        uint8 layerId,
-        uint256 pricePerGrid
-    ) external onlySaleOwner {
-        LayerInfo storage layerInfo = layer[layerId];
-        if (layerInfo.startBlock < block.number) revert TPresale__InProgress();
-        layerInfo.pricePerGrid = pricePerGrid;
-        emit LayerPricePerGridChanged(layerId, pricePerGrid);
-    }
-
-    function setLayerLiquidityBasisPoints(
-        uint8 layerId,
-        uint8 liquidityBasisPoints
-    ) external onlySaleOwner {
-        LayerInfo storage layerInfo = layer[layerId];
-        if (layerInfo.startBlock < block.number) revert TPresale__InProgress();
-        layerInfo.liquidityBasisPoints = liquidityBasisPoints;
-        emit LayerLiquidityBasisPointsChanged(layerId, liquidityBasisPoints);
-    }
-
-    function setLayerReferralBasisPoints(
-        uint8 layerId,
-        uint8 referralBasisPoints
-    ) external onlySaleOwner {
-        LayerInfo storage layerInfo = layer[layerId];
-        if (layerInfo.startBlock < block.number) revert TPresale__InProgress();
-        layerInfo.referralBasisPoints = referralBasisPoints;
-        emit LayerReferralBasisPointsChanged(layerId, referralBasisPoints);
-    }
-
-    function setLayerPreviousLayerBasisPoints(
-        uint8 layerId,
-        uint8 previousLayerBasisPoints
-    ) external onlySaleOwner {
-        LayerInfo storage layerInfo = layer[layerId];
-        if (layerInfo.startBlock < block.number) revert TPresale__InProgress();
-        layerInfo.previousLayerBasisPoints = previousLayerBasisPoints;
-        emit LayerPreviousLayerBasisPointsChanged(
-            layerId,
-            previousLayerBasisPoints
-        );
-    }
-
-    function setTotalTokensForLiquity(uint256 amount) external onlySaleOwner {
-        tokensForLiquidity = amount;
-        emit TotalTokensForLiquidityChanged(amount);
+    function totalTokensNeededToFinalize() external view returns (uint256) {
+        return
+            totalTokensSold +
+            tokensForLiquidity +
+            ((totalTokensSold * platformFeeSell) / BASIS_POINTS);
     }
 }
