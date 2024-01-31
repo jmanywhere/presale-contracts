@@ -239,7 +239,7 @@ contract TestPresale is Test {
         assertEq(referral, address(0));
         assertEq(grids, 2);
 
-    //2 number of totalgrids for user in layer 1 == 2, user has 2 grids
+        //2 number of totalgrids for user in layer 1 == 2, user has 2 grids
         (, , , , , , , , uint8 gridsOccupied, ) = presaleWithToken.layer(1);   
         assertEq(gridsOccupied, 2);
         //3 layerUsers 1, 0 == user1
@@ -314,25 +314,133 @@ contract TestPresale is Test {
         (, , , , , , , , gridsOccupied, ) = presaleWithToken.layer(1);
 
         assertEq(gridsOccupied, 4);
+        //3 - the user position in layer1 should be layerUsers 1, 1 == user2. And layerUsers (1,2) should be user3
+        assertEq(presaleWithToken.layerUsers(1, 3), user3);
+        //4 - totalTokenssold == 4 grid's worth
+        assertEq(presaleWithToken.totalTokensSold(), 4000 ether);
+        //5 - receiveForLiquidity ==  0.4 ether amount
+        assertEq(presaleWithToken.receiveForLiquidity(), 0.4 ether);
 
-        //3 - the user position in layer1 should be layerUsers 1, 1 == user2. And layerUsers (1,2) should be user3 . 
-
-      
-
-
-        
-
-
+    
 
     }
 
     function test_layer_limit() public {
         // Test that when a layer is completely filled, the next deposit, opens up the next layer
-        // If all layers are filled, should fail next deposit.
-        vm.prank(user1);
-        
-        // If all layers are filled, and the last layer is over, should fail next deposit.
 
+
+        // IF ALL LAYERS FILLED SHOULD FAIL NEXT DEPOSIT.
+        vm.expectRevert(); // reason": Sale has not started
+        vm.prank(user1);
+        presaleWithToken.deposit(address(0));
+
+        // we are in layer 1
+        vm.roll(12);
+    
+        vm.prank(user1);
+        presaleWithToken.deposit(address(0));
+        vm.prank(user1);
+        presaleWithToken.deposit(address(0));
+        vm.prank(user1);
+        presaleWithToken.deposit(address(0));
+        vm.prank(user1);
+        presaleWithToken.deposit(address(0));
+        vm.prank(user1);
+        presaleWithToken.deposit(address(0));
+        vm.prank(user1);
+        presaleWithToken.deposit(address(0));
+        vm.prank(user1);
+        presaleWithToken.deposit(address(0));
+        vm.prank(user1);
+        presaleWithToken.deposit(address(0));
+         vm.prank(user1);
+        presaleWithToken.deposit(address(0));
+        vm.prank(user1);
+        presaleWithToken.deposit(address(0));
+        vm.prank(user1);
+        presaleWithToken.deposit(address(0));
+        vm.prank(user1);
+        presaleWithToken.deposit(address(0));
+        vm.prank(user1);
+        presaleWithToken.deposit(address(0));
+        vm.prank(user1);
+        presaleWithToken.deposit(address(0));
+        vm.prank(user1);
+        presaleWithToken.deposit(address(0));
+
+        vm.prank(user2);
+        presaleWithToken.deposit(address(0));
+
+        // DATA THAT WE WANT TO CHECK
+        // 1 - USER HAS ALLOCATED 1 GRID'S WORTH OF SELL TOKENS
+        // userLayerInfo for layer 2, user 1, user2, user 3 has the correct data
+        (
+            uint totalDeposited,
+            uint totalTokensToClaim,
+            uint refRew,
+            address referral,
+            uint8 grids,
+            bool claimed
+        ) = presaleWithToken.userLayer(1, user1);   
+        assertEq(totalDeposited, 1.5 ether);
+        assertEq(totalTokensToClaim, 15000 ether);
+        assertEq(refRew, 0);
+        assertEq(referral, address(0));
+        assertEq(grids, 15);
+        assertEq(claimed, false);
+
+        (
+            totalDeposited,
+            totalTokensToClaim,
+            refRew,
+            referral,
+            grids,
+            claimed
+        ) = presaleWithToken.userLayer(1, user2);
+        assertEq(totalDeposited, 0.1 ether);
+        assertEq(totalTokensToClaim, 1000 ether);
+        assertEq(refRew, 0);
+        assertEq(referral, address(0));
+        assertEq(grids, 1);
+        assertEq(claimed, false);
+
+        
+
+        // 2 - number of grids occupied by the total user in layer 1 == 16, user has 15 grids
+        (, , , , , , , , uint8 gridsOccupied, ) = presaleWithToken.layer(1);
+        assertEq(gridsOccupied, 16);
+
+        //Total tokens sold == 16000 ether
+        assertEq(presaleWithToken.totalTokensSold(), 16000 ether);
+        //receiveForLiquidity ==  1.6 ether amount
+        assertEq(presaleWithToken.receiveForLiquidity(), 1.6 ether);
+
+
+        //AT 17th deposit, the next layer should Error out. Reasom - Layer is full.
+        /*
+        vm.prank(user3);
+        //presaleWithToken.deposit(address(0));
+
+        //(
+        //    totalDeposited,
+        /    totalTokensToClaim,
+            refRew,
+            referral,
+            grids,
+            claimed
+        //) = presaleWithToken.userLayer(1, user3);
+        //assertEq(totalDeposited, 0);
+        */
+
+         
+       
+
+    
+
+
+
+
+        // If all layers are filled, and the last layer is over, should fail next deposit.
     }
 
     function test_refund() public {
