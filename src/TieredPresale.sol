@@ -12,6 +12,7 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
 import "forge-std/console.sol";
 
 error TPresale__InvalidSetup();
+error TPresale__InvalidCaller();
 error TPresale__InProgress();
 error TPresale__NotStarted();
 error TPresale__CouldNotTransfer(address _token, uint amount);
@@ -19,6 +20,7 @@ error TPresale__SaleEnded();
 error TPresale__SaleNotEnded();
 error TPresale__CantClaim();
 error TPresale__InvalidDepositAmount();
+error TPresale__NotEnoughTokens();
 
 contract TieredPresale is ITieredPresale, Ownable, ReentrancyGuard {
     //-----------------------------------------------------------------------------------
@@ -49,13 +51,13 @@ contract TieredPresale is ITieredPresale, Ownable, ReentrancyGuard {
     uint8 public immutable totalLayers;
     uint8 public immutable gridsPerLayer;
     uint8 private offsetLayer = 1;
-    Status private status = Status.PENDING;
+    Status public status = Status.PENDING;
 
     //-----------------------------------------------------------------------------------
     // MODIFIERS
     //-----------------------------------------------------------------------------------
     modifier onlySaleOwner() {
-        if (msg.sender != saleOwnerWallet) revert TPresale__InvalidSetup();
+        if (msg.sender != saleOwnerWallet) revert TPresale__InvalidCaller();
         _;
     }
 
@@ -277,9 +279,15 @@ contract TieredPresale is ITieredPresale, Ownable, ReentrancyGuard {
 
     function finalizeSale() external onlySaleOwner nonReentrant {
         if (!canFinalize()) revert TPresale__SaleNotEnded();
+        uint256 fees = (totalTokensSold * platformFeeSell) / BASIS_POINTS;
+
+        if (
+            totalTokensSold + tokensForLiquidity + fees >
+            IERC20(saleToken).balanceOf(address(this))
+        ) revert TPresale__NotEnoughTokens();
+
         status = Status.FINALIZED;
         // Send tokens to platform
-        uint256 fees = (totalTokensSold * platformFeeSell) / BASIS_POINTS;
         if (fees > 0) {
             _safeTokenTransfer(saleToken, owner(), fees);
         }
@@ -288,11 +296,12 @@ contract TieredPresale is ITieredPresale, Ownable, ReentrancyGuard {
         // Send receive fees to platform
         if (receiveToken == address(0)) {
             fees = address(this).balance;
-            fees -=
-                receiveForPrevLayer +
-                receiveForReferral +
-                receiveForLiquidity;
+            fees -= receiveForPrevLayer + receiveForReferral;
+            uint saleOwnerAmount = fees - receiveForLiquidity;
             fees = (fees * platformFeeReceive) / BASIS_POINTS;
+            if (saleOwnerAmount < fees) {
+                receiveForLiquidity -= fees - saleOwnerAmount;
+            }
             (bool succ, ) = owner().call{value: fees}("");
             if (!succ) revert TPresale__CouldNotTransfer(address(0), fees);
             // create liquidity
@@ -308,18 +317,25 @@ contract TieredPresale is ITieredPresale, Ownable, ReentrancyGuard {
             );
             uint totalReceived = address(this).balance;
             totalReceived -= receiveForPrevLayer + receiveForReferral;
-            (succ, ) = saleOwnerWallet.call{value: totalReceived}("");
-            if (!succ)
-                revert TPresale__CouldNotTransfer(address(0), totalReceived);
+            if (totalReceived > 0) {
+                (succ, ) = saleOwnerWallet.call{value: totalReceived}("");
+                if (!succ)
+                    revert TPresale__CouldNotTransfer(
+                        address(0),
+                        totalReceived
+                    );
+            }
         } else {
             safeApprove(receiveToken, router, receiveForLiquidity);
             fees = IERC20(receiveToken).balanceOf(address(this));
-            fees -=
-                receiveForPrevLayer +
-                receiveForReferral +
-                receiveForLiquidity;
+            fees -= receiveForPrevLayer + receiveForReferral;
+
+            uint saleOwnerAmount = fees - receiveForLiquidity;
             fees = (fees * platformFeeReceive) / BASIS_POINTS;
-            _safeTokenTransfer(receiveToken, owner(), fees);
+            if (saleOwnerAmount < fees) {
+                receiveForLiquidity -= fees - saleOwnerAmount;
+            }
+            if (fees > 0) _safeTokenTransfer(receiveToken, owner(), fees);
             // create liquidity
             IUniswapV2Router02(router).addLiquidity(
                 saleToken,
@@ -333,7 +349,12 @@ contract TieredPresale is ITieredPresale, Ownable, ReentrancyGuard {
             );
             uint totalReceived = IERC20(receiveToken).balanceOf(address(this));
             totalReceived -= receiveForPrevLayer + receiveForReferral;
-            _safeTokenTransfer(receiveToken, saleOwnerWallet, totalReceived);
+            if (totalReceived > 0)
+                _safeTokenTransfer(
+                    receiveToken,
+                    saleOwnerWallet,
+                    totalReceived
+                );
         }
 
         // transfer rest of tokens to owner
