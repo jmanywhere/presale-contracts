@@ -3,7 +3,7 @@
 pragma solidity 0.8.23;
 
 import "forge-std/Test.sol";
-import {TieredPresale} from "../src/TieredPresale.sol";
+import "../src/TieredPresale.sol";
 import {Token} from "../src/mocks/Token.sol";
 
 contract TestPresale is Test {
@@ -206,9 +206,8 @@ contract TestPresale is Test {
         assertEq(grids, 1);
         assertEq(claimed, false);
         // 2 users in grid for layer 1 == 1
-        //@todo - When I uncomment, this affects the subsequent logic.
-       // (, , , , , , , , uint8 gridsOccupied, ) = presaleWithToken.layer(1);
-       // assertEq(gridsOccupied, 1);
+        (, , , , , , , , uint8 gridsOccupied, ) = presaleWithToken.layer(1);
+        assertEq(gridsOccupied, 1);
         // 3 layerUsers 1, 0 == user1
         assertEq(presaleWithToken.layerUsers(1, 0), user1);
         // 4 totalTokenssold == 1 grid's worth
@@ -232,7 +231,6 @@ contract TestPresale is Test {
             claimed
         ) = presaleWithToken.userLayer(1, user1);
 
-
         assertEq(totalDeposited, 0.2 ether);
         assertEq(totalTokensToClaim, 2000 ether);
         assertEq(refRew, 0);
@@ -240,7 +238,7 @@ contract TestPresale is Test {
         assertEq(grids, 2);
 
         //2 number of totalgrids for user in layer 1 == 2, user has 2 grids
-        (, , , , , , , , uint8 gridsOccupied, ) = presaleWithToken.layer(1);   
+        (, , , , , , , , gridsOccupied, ) = presaleWithToken.layer(1);
         assertEq(gridsOccupied, 2);
         //3 layerUsers 1, 0 == user1
         assertEq(presaleWithToken.layerUsers(1, 1), user1);
@@ -250,20 +248,20 @@ contract TestPresale is Test {
         assertEq(presaleWithToken.receiveForLiquidity(), 0.2 ether);
 
         // USER 2 DEPOSITS ON SAME LAYER, SHOULD GET 1 GRIDS ALLOCATED
-           vm.prank(user2);
-            presaleWithToken.deposit(address(0));
+        vm.prank(user2);
+        presaleWithToken.deposit(address(0));
 
         // DATA THAT WE WANT TO CHECK
         // 1. USER2 HAS ALLOCATED 1 GRID'S WORTH OF SELL TOKENS
-           // userLayerInfo for 1, user 2 has the correct data
+        // userLayerInfo for 1, user 2 has the correct data
         (
-           totalDeposited,
-                totalTokensToClaim,
-                refRew,
-                referral,
-                grids,
-                claimed
-            ) = presaleWithToken.userLayer(1, user2);
+            totalDeposited,
+            totalTokensToClaim,
+            refRew,
+            referral,
+            grids,
+            claimed
+        ) = presaleWithToken.userLayer(1, user2);
 
         assertEq(totalDeposited, 0.1 ether);
         assertEq(totalTokensToClaim, 1000 ether);
@@ -278,18 +276,16 @@ contract TestPresale is Test {
         assertEq(gridsOccupied, 3);
 
         //3 - the user position in layer1 should be layerUsers 1, 1 == user2
-         //@audit-issue - The array does't increment properly
+        // offset of 1 caused by initial deposit reversion
         assertEq(presaleWithToken.layerUsers(1, 2), user2);
         //4 - totalTokenssold == 3 grid's worth
         assertEq(presaleWithToken.totalTokensSold(), 3000 ether);
         //5 - receiveForLiquidity ==  0.3 ether amount
         assertEq(presaleWithToken.receiveForLiquidity(), 0.3 ether);
 
-
         // USER 3 DEPOSITS ON SAME LAYER, SHOULD GET 1 GRIDS ALLOCATED
         vm.prank(user3);
         presaleWithToken.deposit(address(0));
-        
 
         // DATA THAT WE WANT TO CHECK
         // 1. USER2 HAS ALLOCATED 2 GRID'S WORTH OF SELL TOKENS
@@ -320,14 +316,10 @@ contract TestPresale is Test {
         assertEq(presaleWithToken.totalTokensSold(), 4000 ether);
         //5 - receiveForLiquidity ==  0.4 ether amount
         assertEq(presaleWithToken.receiveForLiquidity(), 0.4 ether);
-
-    
-
     }
 
     function test_layer_limit() public {
         // Test that when a layer is completely filled, the next deposit, opens up the next layer
-
 
         // IF ALL LAYERS FILLED SHOULD FAIL NEXT DEPOSIT.
         vm.expectRevert(); // reason": Sale has not started
@@ -336,7 +328,7 @@ contract TestPresale is Test {
 
         // we are in layer 1
         vm.roll(12);
-    
+
         vm.prank(user1);
         presaleWithToken.deposit(address(0));
         vm.prank(user1);
@@ -353,7 +345,7 @@ contract TestPresale is Test {
         presaleWithToken.deposit(address(0));
         vm.prank(user1);
         presaleWithToken.deposit(address(0));
-         vm.prank(user1);
+        vm.prank(user1);
         presaleWithToken.deposit(address(0));
         vm.prank(user1);
         presaleWithToken.deposit(address(0));
@@ -381,7 +373,7 @@ contract TestPresale is Test {
             address referral,
             uint8 grids,
             bool claimed
-        ) = presaleWithToken.userLayer(1, user1);   
+        ) = presaleWithToken.userLayer(1, user1);
         assertEq(totalDeposited, 1.5 ether);
         assertEq(totalTokensToClaim, 15000 ether);
         assertEq(refRew, 0);
@@ -404,8 +396,6 @@ contract TestPresale is Test {
         assertEq(grids, 1);
         assertEq(claimed, false);
 
-        
-
         // 2 - number of grids occupied by the total user in layer 1 == 16, user has 15 grids
         (, , , , , , , , uint8 gridsOccupied, ) = presaleWithToken.layer(1);
         assertEq(gridsOccupied, 16);
@@ -415,38 +405,30 @@ contract TestPresale is Test {
         //receiveForLiquidity ==  1.6 ether amount
         assertEq(presaleWithToken.receiveForLiquidity(), 1.6 ether);
 
-
-        //AT 17th deposit, the next layer should Error out. Reasom - Layer is full.
-        /*
+        // 17th deposit goes to next layer
+        vm.expectRevert(TPresale__NotStarted.selector);
         vm.prank(user3);
-        //presaleWithToken.deposit(address(0));
+        presaleWithToken.deposit(address(0));
 
-        //(
-        //    totalDeposited,
-        /    totalTokensToClaim,
+        vm.roll(1010);
+        vm.prank(user3);
+        presaleWithToken.deposit(address(0));
+        (
+            totalDeposited,
+            totalTokensToClaim,
             refRew,
             referral,
             grids,
             claimed
-        //) = presaleWithToken.userLayer(1, user3);
-        //assertEq(totalDeposited, 0);
-        */
+        ) = presaleWithToken.userLayer(2, user3);
+        assertEq(grids, 1);
+        assertEq(totalDeposited, 0.2 ether);
 
-         
-       
+        // Nobody deposits on layer 3 until end
+        vm.roll(6050);
 
-    
-
-
-
-
-        // If all layers are filled, and the last layer is over, should fail next deposit.
-    }
-
-    function test_refund() public {
-        // Test that a user can refund their deposit
-        // Test that a user cant refund when layer is full
-        // test that a user cant refund when timer is 15 min prior to over
-        //  15 min or 10% of block durtaion since start to finish
+        vm.expectRevert(TPresale__SaleEnded.selector);
+        vm.prank(user3);
+        presaleWithToken.deposit(address(0));
     }
 }
