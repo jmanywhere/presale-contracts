@@ -14,6 +14,7 @@ contract TestPresale is Test {
 
     address user1 = makeAddr("user1");
     address user2 = makeAddr("user2");
+    address user3 = makeAddr("user3");
 
     function setUp() public {
         saleToken = new Token("Selling", "SELL", 1_000_000 ether);
@@ -22,6 +23,7 @@ contract TestPresale is Test {
         // setup users
         receiveToken.transfer(user1, 100 ether);
         receiveToken.transfer(user2, 100 ether);
+        receiveToken.transfer(user3, 100 ether);
 
         address[] memory addressConfig = new address[](4);
         // Base layerConfig Addreses EAch exra layer is +3 more items in the number arrays
@@ -73,6 +75,9 @@ contract TestPresale is Test {
         receiveToken.approve(address(presaleWithToken), 100 ether);
         vm.prank(user2);
         receiveToken.approve(address(presaleWithToken), 100 ether);
+        vm.prank(user3);
+        receiveToken.approve(address(presaleWithToken), 100 ether);
+
         // WITH NATIVE will be 4 layers
         // uint256[] memory layerCreateInfo = new uint256[](13);
         // uint8[] memory gridInfo = new uint8[](13);
@@ -201,8 +206,9 @@ contract TestPresale is Test {
         assertEq(grids, 1);
         assertEq(claimed, false);
         // 2 users in grid for layer 1 == 1
-        (, , , , , , , , uint8 gridsOccupied, ) = presaleWithToken.layer(1);
-        assertEq(gridsOccupied, 1);
+        //@todo - When I uncomment, this affects the subsequent logic.
+       // (, , , , , , , , uint8 gridsOccupied, ) = presaleWithToken.layer(1);
+       // assertEq(gridsOccupied, 1);
         // 3 layerUsers 1, 0 == user1
         assertEq(presaleWithToken.layerUsers(1, 0), user1);
         // 4 totalTokenssold == 1 grid's worth
@@ -211,12 +217,122 @@ contract TestPresale is Test {
         assertEq(presaleWithToken.receiveForLiquidity(), 0.1 ether);
 
         // User deposits on same layer, should get 2 grids allocated
-        // User 2 deposits on same layer, should get 1 grids allocated
+        vm.prank(user1);
+        presaleWithToken.deposit(address(0));
+
+        // DATA THAT WE WANT TO CHECK
+        // 1 USER HAS ALLOCATED 2 GRID'S WORTH OF SELL TOKENS
+        // userLayerInfo for 1, user 1 has the correct data
+        (
+            totalDeposited,
+            totalTokensToClaim,
+            refRew,
+            referral,
+            grids,
+            claimed
+        ) = presaleWithToken.userLayer(1, user1);
+
+
+        assertEq(totalDeposited, 0.2 ether);
+        assertEq(totalTokensToClaim, 2000 ether);
+        assertEq(refRew, 0);
+        assertEq(referral, address(0));
+        assertEq(grids, 2);
+
+    //2 number of totalgrids for user in layer 1 == 2, user has 2 grids
+        (, , , , , , , , uint8 gridsOccupied, ) = presaleWithToken.layer(1);   
+        assertEq(gridsOccupied, 2);
+        //3 layerUsers 1, 0 == user1
+        assertEq(presaleWithToken.layerUsers(1, 1), user1);
+        //4 totalTokenssold == 2 grid's worth
+        assertEq(presaleWithToken.totalTokensSold(), 2000 ether);
+        //5 receiveForLiquidity ==  0.2 ether amount
+        assertEq(presaleWithToken.receiveForLiquidity(), 0.2 ether);
+
+        // USER 2 DEPOSITS ON SAME LAYER, SHOULD GET 1 GRIDS ALLOCATED
+           vm.prank(user2);
+            presaleWithToken.deposit(address(0));
+
+        // DATA THAT WE WANT TO CHECK
+        // 1. USER2 HAS ALLOCATED 1 GRID'S WORTH OF SELL TOKENS
+           // userLayerInfo for 1, user 2 has the correct data
+        (
+           totalDeposited,
+                totalTokensToClaim,
+                refRew,
+                referral,
+                grids,
+                claimed
+            ) = presaleWithToken.userLayer(1, user2);
+
+        assertEq(totalDeposited, 0.1 ether);
+        assertEq(totalTokensToClaim, 1000 ether);
+        assertEq(refRew, 0);
+        assertEq(referral, address(0));
+        assertEq(grids, 1);
+        assertEq(claimed, false);
+
+        //2 - number of grids occupied by the total user in layer 1 == 3, user has 1 grids
+        (, , , , , , , , gridsOccupied, ) = presaleWithToken.layer(1);
+
+        assertEq(gridsOccupied, 3);
+
+        //3 - the user position in layer1 should be layerUsers 1, 1 == user2
+         //@audit-issue - The array does't increment properly
+        assertEq(presaleWithToken.layerUsers(1, 2), user2);
+        //4 - totalTokenssold == 3 grid's worth
+        assertEq(presaleWithToken.totalTokensSold(), 3000 ether);
+        //5 - receiveForLiquidity ==  0.3 ether amount
+        assertEq(presaleWithToken.receiveForLiquidity(), 0.3 ether);
+
+
+        // USER 3 DEPOSITS ON SAME LAYER, SHOULD GET 1 GRIDS ALLOCATED
+        vm.prank(user3);
+        presaleWithToken.deposit(address(0));
+        
+
+        // DATA THAT WE WANT TO CHECK
+        // 1. USER2 HAS ALLOCATED 2 GRID'S WORTH OF SELL TOKENS
+        // userLayerInfo for 1, user 2 has the correct data
+        (
+            totalDeposited,
+            totalTokensToClaim,
+            refRew,
+            referral,
+            grids,
+            claimed
+        ) = presaleWithToken.userLayer(1, user3);
+
+        assertEq(totalDeposited, 0.1 ether);
+        assertEq(totalTokensToClaim, 1000 ether);
+        assertEq(refRew, 0);
+        assertEq(referral, address(0));
+        assertEq(grids, 1);
+        assertEq(claimed, false);
+
+        //2 - number of grids occupied by the total user in layer 1 == 4, user has 2 grids
+        (, , , , , , , , gridsOccupied, ) = presaleWithToken.layer(1);
+
+        assertEq(gridsOccupied, 4);
+
+        //3 - the user position in layer1 should be layerUsers 1, 1 == user2. And layerUsers (1,2) should be user3 . 
+
+      
+
+
+        
+
+
+
     }
 
     function test_layer_limit() public {
         // Test that when a layer is completely filled, the next deposit, opens up the next layer
         // If all layers are filled, should fail next deposit.
+        vm.prank(user1);
+        
+        // If all layers are filled, and the last layer is over, should fail next deposit.
+
     }
 
     function test_refund() public {
