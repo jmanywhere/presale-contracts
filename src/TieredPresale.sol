@@ -309,7 +309,7 @@ contract TieredPresale is ITieredPresale, Ownable, ReentrancyGuard {
                 value: receiveForLiquidity
             }(
                 saleToken,
-                0,
+                tokensForLiquidity,
                 tokensForLiquidity,
                 receiveForLiquidity,
                 saleOwnerWallet,

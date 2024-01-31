@@ -19,6 +19,10 @@ contract TestPresale is Test {
     address user3 = makeAddr("user3");
     address protocol = makeAddr("protocol");
 
+    receive() external payable {}
+
+    fallback() external payable {}
+
     function setUp() public {
         saleToken = new Token("Selling", "SELL", 1_000_000 ether);
         receiveToken = new Token("Receive", "RCV", 1_000_000 ether);
@@ -117,6 +121,7 @@ contract TestPresale is Test {
         layerCreateInfo[10] = 4000; //blockDuration
         layerCreateInfo[11] = 0.4 ether; //pricePerGrid
         layerCreateInfo[12] = 2500 ether; //tokensPerGrid
+        vm.prank(protocol);
         presaleWithNative = new TieredPresale(
             gridInfo,
             layerCreateInfo,
@@ -573,5 +578,70 @@ contract TestPresale is Test {
                 presaleWithToken.receiveForPrevLayer()
         );
         // user claims entire sale token
+    }
+
+    function test_finalizeNative() public {
+        vm.roll(10);
+        vm.startPrank(user1);
+        for (uint8 i = 0; i < 4; i++) {
+            presaleWithNative.deposit{value: 0.1 ether}(address(0));
+        }
+        assertEq(presaleWithNative.canFinalize(), false);
+
+        vm.roll(10050);
+        assertEq(presaleWithNative.canFinalize(), true);
+
+        vm.expectRevert(TPresale__InvalidCaller.selector);
+        presaleWithNative.finalizeSale();
+        vm.stopPrank();
+
+        // Calling finalize without adding tokensToSell to Contract
+        console.log(
+            "Sale Token Balance: %s",
+            saleToken.balanceOf(address(presaleWithNative))
+        );
+        console.log(
+            "TokensSold: %s, tokensForLiquidity: %s",
+            presaleWithNative.totalTokensSold(),
+            presaleWithNative.tokensForLiquidity()
+        );
+        vm.expectRevert(TPresale__NotEnoughTokens.selector);
+        presaleWithNative.finalizeSale();
+
+        saleToken.transfer(address(presaleWithNative), 104080 ether);
+
+        uint protocolSaleBalance = saleToken.balanceOf(protocol);
+        uint protocolReceiveBalance = protocol.balance;
+        uint ownerReceiveBalance = address(this).balance;
+
+        presaleWithNative.finalizeSale();
+        assertEq(
+            saleToken.balanceOf(protocol),
+            protocolSaleBalance + 80.0 ether
+        );
+
+        // send enough tokens to contract.
+        // 1. Liquidity was added successfully
+        address pair = IUniswapV2Factory(IUniswapV2Router02(router).factory())
+            .getPair(
+                address(saleToken),
+                address(IUniswapV2Router02(router).WETH())
+            );
+        assertGt(IUniswapV2Pair(pair).totalSupply(), 0);
+
+        // 2. Receive Tokens were added to the sale owner wallet
+        assertEq(protocol.balance, protocolReceiveBalance + 0.004 ether);
+        assertEq(address(this).balance, ownerReceiveBalance);
+        // 3. Sale is finalized
+        assertEq(
+            uint(presaleWithNative.status()),
+            uint(ITieredPresale.Status.FINALIZED)
+        );
+        // 4. There is enough receive tokens for referrals and prevLayer rewards
+        assertGe(
+            address(presaleWithNative).balance,
+            presaleWithNative.receiveForReferral() +
+                presaleWithNative.receiveForPrevLayer()
+        );
     }
 }

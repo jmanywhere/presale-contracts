@@ -5,7 +5,14 @@ interface ITieredPresaleFactory {
     /**
      * @dev Creates a new presale contract and registers it in the factory.
      */
-    function createPresale() external payable returns (address);
+    function createPresale(
+        uint8[] memory gridInfo,
+        uint256[] memory layerCreateInfo,
+        address sellToken,
+        address receiveToken,
+        address router,
+        uint liquidityAmount
+    ) external payable returns (address);
 
     function getInProgress() external view returns (address[] memory);
 
