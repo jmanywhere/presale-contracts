@@ -106,11 +106,11 @@ contract TieredPresale is ITieredPresale, Ownable, ReentrancyGuard {
         platformFeeReceive = platformConfig[0];
         platformFeeSell = platformConfig[1];
         tokensForLiquidity = platformConfig[2];
-        // if (
-        //     IUniswapV2Router02(router).WETH() == address(0) ||
-        //     gridInfo[1] > 10 ||
-        //     gridInfo[1] < 1
-        // ) revert TPresale__InvalidSetup();
+        if (
+            IUniswapV2Router02(router).WETH() == address(0) ||
+            gridInfo[1] > 10 ||
+            gridInfo[1] < 1
+        ) revert TPresale__InvalidSetup();
         totalLayers = gridInfo[0];
         gridsPerLayer = gridInfo[1] ** 2;
         // Check the Grid Info has the correct length
