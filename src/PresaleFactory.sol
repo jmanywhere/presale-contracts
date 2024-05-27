@@ -22,6 +22,10 @@ contract Factory is ITieredPresaleFactory, Ownable {
     event ChangeCreationFee(uint256 newFee);
     event PresaleCreated(address presale, address owner, address tokenToSell);
 
+    receive() external payable {}
+
+    fallback() external payable {}
+
     constructor() Ownable(msg.sender) {}
 
     function createPresale(
