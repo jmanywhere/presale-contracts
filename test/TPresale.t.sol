@@ -449,10 +449,10 @@ contract TestPresale is Test {
         //receiveForLiquidity ==  1.6 ether amount
         assertEq(presaleWithToken.receiveForLiquidity(), 1.6 ether);
 
-        // 17th deposit goes to next layer
-        vm.expectRevert(TPresale__NotStarted.selector);
-        vm.prank(user3);
-        presaleWithToken.deposit(address(0));
+        // 17th deposit goes to next layer // next layer starts immediately
+        // vm.expectRevert(TPresale__NotStarted.selector);
+        // vm.prank(user3);
+        // presaleWithToken.deposit(address(0));
 
         vm.roll(1010);
         vm.prank(user3);

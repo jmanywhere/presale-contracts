@@ -114,7 +114,7 @@ contract Factory is ITieredPresaleFactory, Ownable {
         uint ipOffset = 0;
         for (uint i = 0; i < allPresales; i++) {
             if (
-                TieredPresale(presales[i]).status() ==
+                TieredPresale(presales[i]).saleStatus() ==
                 ITieredPresale.Status.IN_PROGRESS
             ) {
                 inProgress++;
@@ -123,7 +123,7 @@ contract Factory is ITieredPresaleFactory, Ownable {
         address[] memory inProgressPresales = new address[](inProgress);
         for (uint i = 0; i < allPresales; i++) {
             if (
-                TieredPresale(presales[i]).status() ==
+                TieredPresale(presales[i]).saleStatus() ==
                 ITieredPresale.Status.IN_PROGRESS
             ) {
                 inProgressPresales[ipOffset] = presales[i];
